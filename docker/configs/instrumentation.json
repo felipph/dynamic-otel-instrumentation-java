@@ -1,5 +1,5 @@
 {
- "packages": [
+   "packages": [
     {
       "packageName": "com.sample.app",
       "recursive": true,
@@ -9,6 +9,195 @@
         "org.springframework.web.bind.annotation.RestController",
         "org.springframework.stereotype.Repository",
         "org.springframework.stereotype.Component"
+      ]
+    }
+  ],
+  "instrumentations": [
+    {
+      "className": "com.sample.app.web.controller.ProductController",
+      "methodName": "getProduct",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.product_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.web.controller.OrderController",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.customer_id" },
+        { "argIndex": 0, "methodCall": "getPaymentMethod", "attributeName": "app.payment_method" }
+      ]
+    },
+    {
+      "className": "com.sample.app.web.controller.OrderController",
+      "methodName": "getOrder",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.order_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.web.controller.OrderController",
+      "methodName": "processOrder",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.order_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.IOrderService",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.service.customer_id" },
+        { "argIndex": 0, "methodCall": "getPaymentMethod", "attributeName": "app.service.payment_method" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.IOrderService",
+      "methodName": "processOrder",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.order_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.IOrderService",
+      "methodName": "getOrderById",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.order_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.processor.PaymentProcessor",
+      "methodName": "processPayment",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getId", "attributeName": "app.payment.order_id" },
+        { "argIndex": 0, "methodCall": "getOrderNumber", "attributeName": "app.payment.order_number" },
+        { "argIndex": 0, "methodCall": "getTotalAmount", "attributeName": "app.payment.amount" },
+        { "argIndex": 0, "methodCall": "getPaymentMethod", "attributeName": "app.payment.method" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.processor.PaymentProcessor",
+      "methodName": "validatePaymentMethod",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.payment.method_to_validate" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.processor.ShippingCalculator",
+      "methodName": "calculateShipping",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getId", "attributeName": "app.shipping.order_id" },
+        { "argIndex": 0, "methodCall": "getShippingAddress", "attributeName": "app.shipping.address" },
+        { "argIndex": 0, "methodCall": "getSubtotal", "attributeName": "app.shipping.subtotal" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.processor.TaxCalculator",
+      "methodName": "calculateTax",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getId", "attributeName": "app.tax.order_id" },
+        { "argIndex": 0, "methodCall": "getSubtotal", "attributeName": "app.tax.subtotal" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.repository.OrderRepository",
+      "methodName": "findById",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.repository.order_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.repository.OrderRepository",
+      "methodName": "save",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getId", "attributeName": "app.repository.order_id" },
+        { "argIndex": 0, "methodCall": "getOrderNumber", "attributeName": "app.repository.order_number" },
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.repository.customer_id" },
+        { "argIndex": 0, "methodCall": "getTotalAmount", "attributeName": "app.repository.total_amount" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.repository.CustomerRepository",
+      "methodName": "findById",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.repository.customer_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.repository.CustomerRepository",
+      "methodName": "save",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getId", "attributeName": "app.repository.customer_id" },
+        { "argIndex": 0, "methodCall": "getEmail", "attributeName": "app.repository.customer_email" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.validator.OrderValidator",
+      "methodName": "validateOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getId", "attributeName": "app.validator.order_id" },
+        { "argIndex": 0, "methodCall": "getOrderNumber", "attributeName": "app.validator.order_number" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.ICustumerService",
+      "methodName": "getCustomer",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.customer_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.ICustumerService",
+      "methodName": "getCustomerByEmail",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.customer_email" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.ICustumerService",
+      "methodName": "createCustomer",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getEmail", "attributeName": "app.service.customer_email" },
+        { "argIndex": 0, "methodCall": "getFirstName", "attributeName": "app.service.customer_first_name" },
+        { "argIndex": 0, "methodCall": "getLastName", "attributeName": "app.service.customer_last_name" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.ICustumerService",
+      "methodName": "updateCustomer",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.customer_id" },
+        { "argIndex": 1, "methodCall": "getEmail", "attributeName": "app.service.customer_email" },
+        { "argIndex": 1, "methodCall": "getFirstName", "attributeName": "app.service.customer_first_name" },
+        { "argIndex": 1, "methodCall": "getLastName", "attributeName": "app.service.customer_last_name" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.ICustumerService",
+      "methodName": "deleteCustomer",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.customer_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.IInventoryService",
+      "methodName": "getProduct",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.product_id" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.IInventoryService",
+      "methodName": "checkAvailability",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "size", "attributeName": "app.inventory.item_count" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.IInventoryService",
+      "methodName": "reserveItems",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.inventory.order_id" },
+        { "argIndex": 1, "methodCall": "size", "attributeName": "app.inventory.items_to_reserve" }
       ]
     }
   ]

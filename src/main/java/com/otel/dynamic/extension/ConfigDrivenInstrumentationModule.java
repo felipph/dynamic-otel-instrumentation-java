@@ -80,10 +80,15 @@ public class ConfigDrivenInstrumentationModule extends InstrumentationModule {
 
         Logger.info("Dynamic instrumentation: " + classToMethods.size() + " classes configured");
 
-        // Create per-class TypeInstrumentation instances using proper ByteBuddy matchers.
-        // GlobalTypeInstrumentation with dynamic ConfigurationManager calls doesn't work
-        // because the OTel agent's class-loading optimization bypasses custom anonymous matchers.
         List<TypeInstrumentation> instrumentations = new ArrayList<>();
+
+        // IMPORTANT: Always register GlobalTypeInstrumentation first.
+        // This provides dynamic matching based on ConfigurationManager, which enables
+        // hot-reload functionality. When configuration changes and retransformClasses()
+        // is called, the GlobalTypeInstrumentation will re-evaluate matches against
+        // the updated configuration.
+        instrumentations.add(new GlobalTypeInstrumentation());
+        Logger.info("  Registered GlobalTypeInstrumentation (dynamic matching enabled)");
 
         // 1. Per-class instrumentations from the "instrumentations" section
         for (Map.Entry<String, List<String>> entry : classToMethods.entrySet()) {

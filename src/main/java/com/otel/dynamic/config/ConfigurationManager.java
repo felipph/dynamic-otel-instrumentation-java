@@ -108,7 +108,9 @@ public class ConfigurationManager {
             InstrumentationConfig config = objectMapper.readValue(configFile, InstrumentationConfig.class);
             updateConfig(config);
 
-            Logger.info("Configuration loaded successfully. Instrumentations defined: " + config.size());
+            int instCount = config.getInstrumentations() != null ? config.getInstrumentations().size() : 0;
+            int pkgCount = config.getPackages() != null ? config.getPackages().size() : 0;
+            Logger.info("Configuration loaded successfully. Instrumentations: " + instCount + ", Packages: " + pkgCount);
 
         } catch (IOException e) {
             Logger.error("Failed to load configuration from: " + path, e);
