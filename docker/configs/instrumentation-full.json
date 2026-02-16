@@ -1,7 +1,7 @@
 {
-  "packages": [
+   "packages": [
     {
-      "packageName": "com.sample.app.ejb",
+      "packageName": "com.sample.app",
       "recursive": true,
       "annotations": [
         "org.springframework.stereotype.Service",

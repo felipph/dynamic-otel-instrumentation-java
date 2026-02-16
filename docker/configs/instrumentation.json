@@ -1,17 +1,14 @@
 {
-  "instrumentations": [
+ "packages": [
     {
-        "className": "com.sample.app.web.controller.ProductController",
-        "methodName": "getProduct",
-        "attributes": [
-            { "argIndex": 0, "attributeName": "app.product_id" }
-        ]
-    },
-    {
-      "className": "com.sample.app.ejb.service.IInventoryService",
-      "methodName": "getProduct",
-      "attributes": [
-        { "argIndex": 0, "attributeName": "app.service.product_id" }
+      "packageName": "com.sample.app",
+      "recursive": true,
+      "annotations": [
+        "org.springframework.stereotype.Service",
+        "org.springframework.stereotype.Controller",
+        "org.springframework.web.bind.annotation.RestController",
+        "org.springframework.stereotype.Repository",
+        "org.springframework.stereotype.Component"
       ]
     }
   ]

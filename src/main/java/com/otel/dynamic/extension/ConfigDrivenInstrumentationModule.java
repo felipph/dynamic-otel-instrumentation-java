@@ -80,11 +80,29 @@ public class ConfigDrivenInstrumentationModule extends InstrumentationModule {
 
         Logger.info("Dynamic instrumentation: " + classToMethods.size() + " classes configured");
 
-        // Use a single GlobalTypeInstrumentation that delegates to ConfigurationManager for matching.
-        // This allows adding new classes/packages at runtime via retransformClasses().
+        // Create per-class TypeInstrumentation instances using proper ByteBuddy matchers.
+        // GlobalTypeInstrumentation with dynamic ConfigurationManager calls doesn't work
+        // because the OTel agent's class-loading optimization bypasses custom anonymous matchers.
         List<TypeInstrumentation> instrumentations = new ArrayList<>();
-        instrumentations.add(new GlobalTypeInstrumentation());
-        
+
+        // 1. Per-class instrumentations from the "instrumentations" section
+        for (Map.Entry<String, List<String>> entry : classToMethods.entrySet()) {
+            instrumentations.add(new DynamicTypeInstrumentation(entry.getKey(), entry.getValue()));
+            Logger.info("  Registered class instrumentation: " + entry.getKey()
+                    + " methods=" + entry.getValue());
+        }
+
+        // 2. Package-level instrumentations from the "packages" section
+        if (configManager.getConfig() != null && configManager.getConfig().getPackages() != null) {
+            for (com.otel.dynamic.config.model.PackageConfig pkg : configManager.getConfig().getPackages()) {
+                instrumentations.add(new PackageTypeInstrumentation(
+                        pkg.getPackageName(), pkg.isRecursive(), pkg.getAnnotations()));
+                Logger.info("  Registered package instrumentation: " + pkg.getPackageName()
+                        + " recursive=" + pkg.isRecursive());
+            }
+        }
+
+        Logger.info("Total TypeInstrumentation instances: " + instrumentations.size());
         return instrumentations;
     }
 
@@ -97,10 +115,11 @@ public class ConfigDrivenInstrumentationModule extends InstrumentationModule {
     public List<String> getAdditionalHelperClassNames() {
         // These classes will be injected into the application classloader
         // so that inlined advice code can resolve them at runtime.
-        // DynamicInstrumentationConfig and its inner classes are now on bootstrap classpath
-        // via DynamicAgent, so we don't need to inject them here.
         return Arrays.asList(
-                "com.otel.dynamic.extension.DynamicAdvice"
+                "com.otel.dynamic.extension.DynamicAdvice",
+                "com.otel.dynamic.agent.DynamicInstrumentationConfig",
+                "com.otel.dynamic.agent.DynamicInstrumentationConfig$AttributeRule",
+                "com.otel.dynamic.agent.DynamicInstrumentationConfig$RuleMatch"
         );
     }
 }
