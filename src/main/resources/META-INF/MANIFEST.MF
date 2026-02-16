@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Premain-Class: com.otel.dynamic.agent.DynamicInstrumentationAgent
+Agent-Class: com.otel.dynamic.agent.DynamicInstrumentationAgent
+Can-Retransform-Classes: true
+Can-Redefine-Classes: true
+Implementation-Title: Dynamic OpenTelemetry Instrumentation Agent
+Implementation-Version: 1.0.0
+Implementation-Vendor: OpenTelemetry Dynamic Instrumentation
+Built-By: Maven

@@ -1,0 +1,18 @@
+{
+  "instrumentations": [
+    {
+        "className": "com.sample.app.web.controller.ProductController",
+        "methodName": "getProduct",
+        "attributes": [
+            { "argIndex": 0, "attributeName": "app.product_id" }
+        ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.IInventoryService",
+      "methodName": "getProduct",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.product_id" }
+      ]
+    }
+  ]
+}

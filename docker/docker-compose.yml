@@ -1,0 +1,172 @@
+# ============================================================================
+# Dynamic OpenTelemetry Instrumentation Agent - Complete Test Stack
+# ============================================================================
+#
+# Este docker-compose integra:
+# - Agente de Instrumentação (java-otel-instrumentation)
+# - Sample Spring MVC Application (sample-spring-mvc-app)
+# - Infraestrutura de Observabilidade (Jaeger)
+#
+# Uso:
+#   cd /home/felipph/DEV/java-otel-instrumentation/docker
+#   docker-compose up -d
+#
+# Pré-requisitos:
+#   1. Build do agente: cd .. && ./scripts/build.sh
+#   2. Build da sample app: cd ../../sample-spring-mvc-app && ./scripts/build.sh
+#
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # DATABASE LAYER
+  # ==========================================================================
+
+  # PostgreSQL Database
+  postgres:
+    image: pgvector/pgvector:pg18-trixie
+    container_name: otel-postgres
+    environment:
+      POSTGRES_DB: sampledb
+      POSTGRES_USER: sampleuser
+      POSTGRES_PASSWORD: samplepass
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      # Usa o script de init da sample app
+      - ../../sample-spring-mvc-app/docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - otel-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sampleuser -d sampledb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+  
+  # ==========================================================================
+  # OBSERVABILITY LAYER - Jaeger
+  # ==========================================================================
+
+  # Jaeger All-in-One (Collector + Query + UI)
+  jaeger:
+    image: jaegertracing/jaeger:2.6.0
+    container_name: otel-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC receiver
+      - "4318:4318"    # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - otel-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:16686/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # APPLICATION LAYER - JBoss com Sample App e Agente
+  # ==========================================================================
+
+  jboss:
+    image: quay.io/wildfly/wildfly:26.1.3.Final-jdk11
+    container_name: otel-jboss
+    command: >
+      bash -c "/opt/jboss/wildfly/bin/add-user.sh admin admin --silent &&
+      /opt/jboss/wildfly/bin/standalone.sh -b 0.0.0.0 -bmanagement 0.0.0.0"
+    environment:
+      # JVM flags: -javaagent, log manager, extension and config path are in standalone.conf
+      # Only environment-specific OTel properties go here
+      JAVA_OPTS_APPEND: >-
+        -Dotel.service.name=sample-spring-mvc-app
+
+      # OpenTelemetry environment variables
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_EXPORTER_OTLP_TIMEOUT: "30000"
+      OTEL_SERVICE_NAME: sample-spring-mvc-app
+
+      # Database Configuration (used by application as fallback)
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/sampledb
+      POSTGRES_USER: sampleuser
+      POSTGRES_PASSWORD: samplepass
+
+    ports:
+      - "8080:8080"   # HTTP Application
+      - "8443:8443"   # HTTPS
+      - "9990:9990"   # JMX / Management
+      - "8787:8787"   # Debug (if enabled)
+
+    volumes:
+      # standalone.conf
+      - ./configs/standalone.conf:/opt/jboss/wildfly/bin/standalone.conf:ro
+      
+      # OpenTelemetry Java Agent
+      - ./opentelemetry-javaagent.jar:/opt/jboss/agents/opentelemetry-javaagent.jar:ro
+      # Dynamic Instrumentation Extension
+      - ../target/dynamic-instrumentation-agent-1.0.0.jar:/opt/jboss/agents/dynamic-instrumentation-extension.jar:ro
+
+      # Configuração de Instrumentação
+      - ./configs/instrumentation.json:/opt/otel/config/instrumentation.json:ro
+
+      # Sample Application EAR
+      - ../../sample-spring-mvc-app/ear/target/sample-app.ear:/opt/jboss/wildfly/standalone/deployments/sample-app.ear:ro
+
+      # PostgreSQL JDBC Driver Module
+      - ./configs/postgresql-module:/opt/jboss/wildfly/modules/system/layers/base/org/postgresql/main:ro
+
+    networks:
+      - otel-network
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/sample/api/products"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+    restart: unless-stopped
+
+  # ==========================================================================
+  # UTILITY SERVICES
+  # ==========================================================================
+
+  # Wait-for script helper (pode ser usado para aguardar serviços)
+  # init:
+  #   image: busybox
+  #   container_name: otel-init
+  #   command: sh -c "until nc -z postgres 5432; do sleep 1; done"
+  #   networks:
+  #     - otel-network
+  #   depends_on:
+  #     - postgres
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+
+networks:
+  otel-network:
+    driver: bridge
+    name: otel-network
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+
+volumes:
+  postgres-data:
+    name: otel-postgres-data
