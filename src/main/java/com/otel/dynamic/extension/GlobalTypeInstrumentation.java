@@ -1,5 +1,7 @@
 package com.otel.dynamic.extension;
 
+import java.util.List;
+
 import com.otel.dynamic.config.ConfigurationManager;
 import com.otel.dynamic.config.model.PackageConfig;
 import io.opentelemetry.javaagent.extension.instrumentation.TypeInstrumentation;
@@ -8,8 +10,6 @@ import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatchers;
-
-import java.util.List;
 
 /**
  * A global type instrumentation that matches classes dynamically based on the
@@ -32,30 +32,27 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                 String className = target.getName();
 
                 // 1. Check explicit class configuration (from "instrumentations" section)
-                if (ConfigurationManager.getInstance().isClassInstrumented(className)) {
-                    // For explicit class configs, no annotation check needed
+                // These don't require annotation filtering
+                if (ConfigurationManager.getInstance().hasExplicitClassConfig(className)) {
                     return true;
                 }
 
                 // 2. Check package configuration with annotation filtering
-                List<PackageConfig> packages = ConfigurationManager.getInstance().getConfig().getPackages();
-                if (packages != null) {
-                    for (PackageConfig pkg : packages) {
-                        if (matchesPackage(className, pkg)) {
-                            // Check annotation filter if specified
-                            List<String> annotations = pkg.getAnnotations();
-                            if (annotations == null || annotations.isEmpty()) {
-                                return true; // No annotation filter, match accepted
-                            }
-
-                            // Check if class has any of the required annotations
-                            for (String annotation : annotations) {
-                                if (hasAnnotation(target, annotation)) {
-                                    return true;
-                                }
-                            }
+                PackageConfig pkgConfig = ConfigurationManager.getInstance().getMatchingPackageConfig(className);
+                if (pkgConfig != null) {
+                    List<String> annotations = pkgConfig.getAnnotations();
+                    // If no annotations specified, match all classes in package
+                    if (annotations == null || annotations.isEmpty()) {
+                        return true;
+                    }
+                    // Check if class has any of the required annotations
+                    for (String annotation : annotations) {
+                        if (hasAnnotation(target, annotation)) {
+                            return true;
                         }
                     }
+                    // Class is in package but doesn't have required annotation
+                    return false;
                 }
 
                 // 3. Check hierarchy for interface-based configuration
@@ -64,7 +61,7 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                     while (current != null && !current.represents(Object.class)) {
                         // Check interfaces of this class
                         for (TypeDescription.Generic iface : current.getInterfaces()) {
-                            if (ConfigurationManager.getInstance().isClassInstrumented(iface.asErasure().getName())) {
+                            if (ConfigurationManager.getInstance().hasExplicitClassConfig(iface.asErasure().getName())) {
                                 return true;
                             }
                         }
@@ -78,15 +75,6 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                 }
 
                 return false;
-            }
-
-            private boolean matchesPackage(String className, PackageConfig pkg) {
-                String packageName = pkg.getPackageName();
-                if (!className.startsWith(packageName + ".")) {
-                    return false;
-                }
-                String remainder = className.substring(packageName.length() + 1);
-                return pkg.isRecursive() || !remainder.contains(".");
             }
 
             private boolean hasAnnotation(TypeDescription target, String annotationName) {
@@ -124,15 +112,28 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                     TypeDescription declaringType = target.getDeclaringType().asErasure();
                     String declaringClassName = declaringType.getName();
 
-                    // 1. Check explicit method configuration
+                    // 1. Check explicit method configuration (no annotation filtering)
                     if (ConfigurationManager.getInstance().isMethodInstrumented(declaringClassName, methodName)) {
                         return true;
                     }
 
                     // 2. Check if this is a package-level instrumented class
-                    // and the method is declared within the package
-                    if (isPackageInstrumentedClass(declaringClassName)) {
-                        return true;
+                    // Must also verify annotation filtering
+                    PackageConfig pkgConfig = ConfigurationManager.getInstance().getMatchingPackageConfig(declaringClassName);
+                    if (pkgConfig != null) {
+                        List<String> annotations = pkgConfig.getAnnotations();
+                        // If no annotations filter, or if class has required annotation, match
+                        if (annotations == null || annotations.isEmpty()) {
+                            return true;
+                        }
+                        // Check annotation - must have at least one
+                        for (String annotation : annotations) {
+                            if (hasAnnotation(declaringType, annotation)) {
+                                return true;
+                            }
+                        }
+                        // Class is in package but doesn't have required annotation
+                        return false;
                     }
 
                     // 3. Check hierarchy for interface-based configuration
@@ -158,27 +159,12 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                     return false;
                 }
 
-                private boolean isPackageInstrumentedClass(String className) {
-                    List<PackageConfig> packages = ConfigurationManager.getInstance().getConfig().getPackages();
-                    if (packages == null) return false;
-
-                    for (PackageConfig pkg : packages) {
-                        String packageName = pkg.getPackageName();
-                        if (className.startsWith(packageName + ".")) {
-                            String remainder = className.substring(packageName.length() + 1);
-                            boolean packageMatch = pkg.isRecursive() || !remainder.contains(".");
-                            if (!packageMatch) continue;
-
-                            // Check annotation filter
-                            List<String> annotations = pkg.getAnnotations();
-                            if (annotations == null || annotations.isEmpty()) {
-                                return true;
-                            }
-                            // Annotation check is done in typeMatcher, so if we got here, it passed
-                            return true;
-                        }
+                private boolean hasAnnotation(TypeDescription target, String annotationName) {
+                    try {
+                        return ElementMatchers.isAnnotatedWith(ElementMatchers.named(annotationName)).matches(target);
+                    } catch (Exception e) {
+                        return false;
                     }
-                    return false;
                 }
             },
             DynamicAdvice.class.getName()

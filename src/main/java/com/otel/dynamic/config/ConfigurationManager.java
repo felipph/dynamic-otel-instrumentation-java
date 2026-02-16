@@ -226,7 +226,7 @@ public class ConfigurationManager {
             return true;
         }
 
-        // Check package match
+        // Check package match (without annotation filtering - use isClassInPackage for annotation-aware check)
         if (snapshot.getConfig().getPackages() != null) {
             for (com.otel.dynamic.config.model.PackageConfig pkg : snapshot.getConfig().getPackages()) {
                 if (className.startsWith(pkg.getPackageName() + ".")) {
@@ -239,6 +239,38 @@ public class ConfigurationManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Check if a class has an explicit configuration (not from package matching).
+     * Use this to distinguish explicit class configs from package-based configs.
+     */
+    public boolean hasExplicitClassConfig(String className) {
+        ConfigSnapshot snapshot = currentConfig.get();
+        if (snapshot == null) return false;
+        return snapshot.hasConfigForClass(className);
+    }
+
+    /**
+     * Find the package configuration that matches this class (if any).
+     * Returns null if no package config matches.
+     */
+    public com.otel.dynamic.config.model.PackageConfig getMatchingPackageConfig(String className) {
+        ConfigSnapshot snapshot = currentConfig.get();
+        if (snapshot == null) return null;
+
+        if (snapshot.getConfig().getPackages() != null) {
+            for (com.otel.dynamic.config.model.PackageConfig pkg : snapshot.getConfig().getPackages()) {
+                if (className.startsWith(pkg.getPackageName() + ".")) {
+                    String remainder = className.substring(pkg.getPackageName().length() + 1);
+                    boolean matches = pkg.isRecursive() || !remainder.contains(".");
+                    if (matches) {
+                        return pkg;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**
