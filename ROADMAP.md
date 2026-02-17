@@ -44,6 +44,7 @@
 ### Alta Prioridade
 
 - [ ] Docker compose contendo com profiles para diferentes ambientes de execução. Um para jboss, outro para o springboot. O profile padrão deve incluir somente o jagger. Postgres pode existir para os profiles jboss ou springboot.
+- [ ] Possibilidade do instrumentador inspecionar todas as classes e métodos da aplicação salvar um arquivo com as possíveis instrumentações. Isso deve ser algo que liga e desliga.
 
 ### Média Prioridade
 - [ ] **Interface Web de Gerenciamento**
