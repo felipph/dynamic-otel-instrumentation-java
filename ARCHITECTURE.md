@@ -80,23 +80,23 @@ Detailed diagrams showing how the Dynamic OpenTelemetry Instrumentation Extensio
 ## Component Diagram
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        Extension Components                          │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │              ConfigDrivenInstrumentationModule                │   │
-│  │              (SPI Entry Point)                                │   │
-│  │                                                              │   │
-│  │  Responsibilities:                                           │   │
-│  │  • Discovered by OTel Agent via @AutoService                 │   │
-│  │  • Reads instrumentation.config.path system property         │   │
-│  │  • Initializes ConfigurationManager                          │   │
-│  │  • Populates DynamicInstrumentationConfig registry           │   │
-│  │  • Creates TypeInstrumentation instances                     │   │
-│  │  • Declares helper classes for app classloader injection     │   │
-│  └──────────┬──────────────────────────┬────────────────────────┘   │
-│             │                          │                             │
-│             ▼                          ▼                             │
+┌────────────────────────────────────────────────────────────────────┐
+│                        Extension Components                        │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │              ConfigDrivenInstrumentationModule               │  │
+│  │              (SPI Entry Point)                               │  │
+│  │                                                              │  │
+│  │  Responsibilities:                                           │  │
+│  │  • Discovered by OTel Agent via @AutoService                 │  │
+│  │  • Reads instrumentation.config.path system property         │  │
+│  │  • Initializes ConfigurationManager                          │  │
+│  │  • Populates DynamicInstrumentationConfig registry           │  │
+│  │  • Creates TypeInstrumentation instances                     │  │
+│  │  • Declares helper classes for app classloader injection     │  │
+│  └──────────┬──────────────────────────┬────────────────────────┘  │
+│             │                          │                           │
+│             ▼                          ▼                           │
 │  ┌─────────────────────┐  ┌──────────────────────────┐             │
 │  │ DynamicType         │  │ PackageType              │             │
 │  │ Instrumentation     │  │ Instrumentation          │             │
@@ -110,53 +110,76 @@ Detailed diagrams showing how the Dynamic OpenTelemetry Instrumentation Extensio
 │  │   interfaces        │  │   (non-synthetic,        │             │
 │  │                     │  │    non-constructor)      │             │
 │  └─────────┬───────────┘  └────────────┬─────────────┘             │
-│            │                           │                            │
-│            └─────────┬─────────────────┘                            │
-│                      ▼                                              │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                      DynamicAdvice                            │   │
-│  │                      (Injected into app classloader)          │   │
-│  │                                                              │   │
-│  │  @OnMethodEnter:                                             │   │
-│  │  • Create Span (via GlobalOpenTelemetry)                     │   │
-│  │  • Detect interface origin                                   │   │
-│  │  • Extract custom attributes                                 │   │
-│  │  • Make span current                                         │   │
-│  │                                                              │   │
-│  │  @OnMethodExit:                                              │   │
-│  │  • Close scope                                               │   │
-│  │  • Record exception (if any)                                 │   │
-│  │  • End span                                                  │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │              DynamicInstrumentationConfig                     │   │
-│  │              (Injected into app classloader)                  │   │
-│  │                                                              │   │
-│  │  • register()            → writes System property            │   │
-│  │  • getRules()            → reads System property             │   │
-│  │  • findRulesForHierarchy → walks class hierarchy             │   │
-│  │  • clear()               → removes all rules                 │   │
-│  │                                                              │   │
-│  │  Inner classes:                                              │   │
-│  │  • AttributeRule  (argIndex, methodCall, attributeName)      │   │
-│  │  • RuleMatch      (sourceClassName, rules, fromInterface)    │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │              Configuration Layer                              │   │
-│  │              (Agent classloader only)                         │   │
-│  │                                                              │   │
-│  │  ConfigurationManager ──► InstrumentationConfig              │   │
-│  │       │                        ├── List<MethodConfig>        │   │
-│  │       │                        └── List<PackageConfig>       │   │
-│  │       │                                                      │   │
-│  │       ├── ConfigurationWatcher (file change detection)       │   │
-│  │       └── Jackson ObjectMapper (shaded)                      │   │
-│  │                                                              │   │
-│  │  JMX: ConfigManager / ConfigManagerMBean                     │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────────┘
+│            │                           │                           │
+│            └─────────┬─────────────────┘                           │
+│                      ▼                                             │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │              GlobalTypeInstrumentation                       │  │
+│  │              (Hot Reload Enabler)                            │  │
+│  │                                                              │  │
+│  │  • Matches classes dynamically at runtime                    │  │
+│  │  • Checks ConfigurationManager at match time                 |  │
+│  │  • Enables retransformation after config changes             │  │
+│  │  • Supports all three modes: class, package, interface       │  │
+│  │  • Skips constructors, synthetic, and Object methods         │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │                      DynamicAdvice                           │  │
+│  │                      (Injected into app classloader)         │  │
+│  │                                                              │  │
+│  │  @OnMethodEnter:                                             │  │
+│  │  • Create Span (via GlobalOpenTelemetry)                     │  │
+│  │  • Detect interface origin                                   │  │
+│  │  • Extract custom attributes                                 │  │
+│  │  • Make span current                                         │  │
+│  │                                                              │  │
+│  │  @OnMethodExit:                                              │  │
+│  │  • Close scope                                               │  │
+│  │  • Record exception (if any)                                 │  │
+│  │  • End span                                                  │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │              DynamicInstrumentationConfig                    │  │
+│  │              (Injected into app classloader)                 │  │
+│  │                                                              │  │
+│  │  • register()            → writes System property            │  │
+│  │  • getRules()            → reads System property             │  │
+│  │  • findRulesForHierarchy → walks class hierarchy             │  │
+│  │  • clear()               → removes all rules                 │  │
+│  │                                                              │  │
+│  │  Inner classes:                                              │  │
+│  │  • AttributeRule  (argIndex, methodCall, attributeName)      │  │
+│  │  • RuleMatch      (sourceClassName, rules, fromInterface)    │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │              Configuration Layer                             │  │
+│  │              (Agent classloader only)                        │  │
+│  │                                                              │  │
+│  │  ConfigurationManager ──► InstrumentationConfig              │  │
+│  │       │                        ├── List<MethodConfig>        │  │
+│  │       │                        └── List<PackageConfig>       │  │
+│  │       │                                                      │  │
+│  │       ├── ConfigurationWatcher (file change detection)       │  │
+│  │       ├── ConfigSnapshot (immutable thread-safe config)      │  │
+│  │       └── Jackson ObjectMapper (shaded)                      │  │
+│  │                                                              │  │
+│  │  JMX: ConfigManager / ConfigManagerMBean                     │  │
+│  │       • Deferred registration (30s delay for app servers)    │  │
+│  │       • Hot reload via retransformClasses()                  │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │              DynamicAgent (Java Agent Entry Point)           │  │
+│  │                                                              │  │
+│  │  • premain() / agentmain() entry points                      │  │
+│  │  • Captures Instrumentation instance for hot reload          │  │
+│  │  • Adds JAR to bootstrap classloader search                  │  │
+│  │  • Required as -javaagent (not just OTel extension)          │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -166,7 +189,12 @@ Detailed diagrams showing how the Dynamic OpenTelemetry Instrumentation Extensio
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Bootstrap Classloader                        │
-│                        (JVM core classes)                            │
+│                        (JVM core classes)                           │
+│                                                                     │
+│  Injected by DynamicAgent:                                         │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │ InstrumentationAccessor (stores Instrumentation instance)  │     │
+│  └────────────────────────────────────────────────────────────┘     │
 └──────────────────────────────┬──────────────────────────────────────┘
                                │
               ┌────────────────┴────────────────┐
@@ -188,15 +216,26 @@ Detailed diagrams showing how the Dynamic OpenTelemetry Instrumentation Extensio
 │  │ Instrumentation    │──┼────┼─▶│   $AttributeRule           │  │
 │  │ Module             │  │    │  │ DynamicInstrumentationConf │  │
 │  │                    │  │    │  │   $RuleMatch               │  │
-│  │ ConfigurationMgr   │  │    │  └────────────────────────────┘  │
-│  │ Jackson (shaded)   │  │    │                                  │
-│  │ Model classes      │  │    │  Your application classes:       │
-│  │ Logger             │  │    │  ┌────────────────────────────┐  │
-│  │ JMX ConfigManager  │  │    │  │ OrderService               │  │
-│  └────────────────────┘  │    │  │ CustomerRepository         │  │
-│                          │    │  │ PaymentProcessor           │  │
-│  NOT visible to app ──── │    │  │ ... (with inlined advice)  │  │
-│                          │    │  └────────────────────────────┘  │
+│  │ GlobalType         │  │    │  └────────────────────────────┘  │
+│  │ Instrumentation    │  │    │                                  │
+│  │                    │  │    │  Your application classes:       │
+│  │ ConfigurationMgr   │  │    │  ┌────────────────────────────┐  │
+│  │ ConfigSnapshot     │  │    │  │ OrderService               │  │
+│  │ Jackson (shaded)   │  │    │  │ CustomerRepository         │  │
+│  │ Model classes      │  │    │  │ PaymentProcessor           │  │
+│  │ Logger             │  │    │  │ ... (with inlined advice)  │  │
+│  │ JMX ConfigManager  │  │    │  └────────────────────────────┘  │
+│  └────────────────────┘  │    │                                  │
+│                          │    │                                  │
+│  DynamicAgent (premain): │    │                                  │
+│  ┌────────────────────┐  │    │                                  │
+│  │ Captures           │  │    │                                  │
+│  │ Instrumentation    │──┼────┼─► Used by JMX for hot reload    │
+│  │ instance           │  │    │                                  │
+│  └────────────────────┘  │    │                                  │
+│                          │    │                                  │
+│  NOT visible to app ──── │    │                                  │
+│                          │    │                                  │
 └──────────────────────────┘    └──────────────────────────────────┘
               │                                 │
               │    System Properties            │
@@ -383,9 +422,9 @@ Config entry:       packageName = "com.myapp.service", recursive = true
             │                                   │
             │ recursive=true?                   │
             │   YES → nameStartsWith(           │
-            │           "com.myapp.service.")    │
+            │           "com.myapp.service.")   │
             │   NO  → name starts with prefix   │
-            │         AND no more dots after it  │
+            │         AND no more dots after it │
             │                                   │
             │ "com.myapp.service.impl.          │
             │  OrderServiceImpl"                │
@@ -402,9 +441,9 @@ Config entry:       packageName = "com.myapp.service", recursive = true
             │                                   │
             │ isAnnotatedWith(named(            │
             │   "org.springframework.           │
-            │    stereotype.Service"))           │
+            │    stereotype.Service"))          │
             │                                   │
-            │ OrderServiceImpl has @Service?     │
+            │ OrderServiceImpl has @Service?    │
             │   YES → PASS ✓                    │
             │   NO  → FAIL ✗                    │
             └──────────────┬────────────────────┘
@@ -419,8 +458,8 @@ Config entry:       packageName = "com.myapp.service", recursive = true
             │ • Excluding synthetic methods     │
             │                                   │
             │ isDeclaredBy(target)              │
-            │   .and(not(isConstructor()))       │
-            │   .and(not(isSynthetic()))         │
+            │   .and(not(isConstructor()))      │
+            │   .and(not(isSynthetic()))        │
             └───────────────────────────────────┘
 ```
 

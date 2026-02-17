@@ -87,17 +87,23 @@ curl -X POST http://localhost:8080/sample/api/orders \
 ### JMX - Recarregar Config
 
 ```bash
-# Encontrar PID
+# Encontrar PID (geralmente 1 em containers Docker)
 docker exec otel-jboss ps aux | grep wildfly
 
-# Recarregar configuração
+# Recarregar configuração (hot reload)
 docker exec otel-jboss jcmd 1 JMX.invoke \
   com.otel.dynamic:type=ConfigManager reloadConfiguration
 
 # Habilitar debug
 docker exec otel-jboss jcmd 1 JMX.invoke \
   com.otel.dynamic:type=ConfigManager setDebugEnabled true
+
+# Verificar estado
+docker exec otel-jboss jcmd 1 JMX.invoke \
+  com.otel.dynamic:type=ConfigManager isDebugEnabled
 ```
+
+> **Nota:** O registro do MBean é adiado em ~30 segundos após a inicialização da JVM para permitir que servidores de aplicação (WildFly/JBoss) inicializem completamente.
 
 ---
 
@@ -137,27 +143,59 @@ java-otel-instrumentation/
 │   └── reload.sh
 ├── target/
 │   └── dynamic-instrumentation-agent-1.0.0.jar
-└── README.md
+├── README.md
+├── QUICKSTART.md
+├── ARCHITECTURE.md
+└── ROADMAP.md
 ```
+
+---
+
+## Variáveis de Ambiente
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `INSTRUMENTATION_CONFIG_PATH` | `/opt/otel/config/instrumentation.json` | Caminho do arquivo de configuração |
+| `OTEL_SERVICE_NAME` | — | Nome do serviço nos traces |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | Endpoint do collector OTLP |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | Protocolo: `grpc` ou `http/protobuf` |
+
+### Propriedades do Sistema
+
+| Propriedade | Padrão | Descrição |
+|-------------|--------|-----------|
+| `instrumentation.config.path` | `/opt/otel/config/instrumentation.json` | Caminho do JSON (tem precedência sobre env var) |
 
 ---
 
 ## Configuração de Instrumentação
 
-Arquivo: `../../sample-spring-mvc-app/config/instrumentation.json`
+Arquivo: `docker/configs/instrumentation.json`
 
 ```json
 {
+  "packages": [
+    {
+      "packageName": "com.sample.app",
+      "recursive": true,
+      "annotations": [
+        "org.springframework.stereotype.Service",
+        "org.springframework.stereotype.Repository",
+        "org.springframework.stereotype.Controller"
+      ]
+    }
+  ],
   "instrumentations": [
     {
-      "className": "com.sample.app.service.OrderService",
-      "methodName": "processOrder",
+      "className": "com.sample.app.ejb.service.IOrderService",
+      "methodName": "createOrder",
       "attributes": [
-        { "argIndex": 0, "attributeName": "app.order_id" }
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.customer_id" },
+        { "argIndex": 0, "methodCall": "getPaymentMethod", "attributeName": "app.payment_method" }
       ]
     },
     {
-      "className": "com.sample.app.repository.OrderRepository",
+      "className": "com.sample.app.ejb.repository.OrderRepository",
       "methodName": "save",
       "attributes": [
         { "argIndex": 0, "methodCall": "getId", "attributeName": "app.order.id" },
@@ -168,11 +206,16 @@ Arquivo: `../../sample-spring-mvc-app/config/instrumentation.json`
 }
 ```
 
-Para recarregar após editar:
+### Hot Reload
+
+Para recarregar a configuração após editar o arquivo (sem reiniciar a aplicação):
+
 ```bash
 docker exec otel-jboss jcmd 1 JMX.invoke \
   com.otel.dynamic:type=ConfigManager reloadConfiguration
 ```
+
+> O hot reload funciona retransformando as classes já carregadas com base na nova configuração. Classes podem ser adicionadas ou removidas da instrumentação dinamicamente.
 
 ---
 

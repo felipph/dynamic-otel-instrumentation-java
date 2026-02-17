@@ -111,7 +111,7 @@ Create an `instrumentation.json` file:
 
 ### 3. Run Your Application
 
-To enable **hot reload**, the extension JAR must be added as a `-javaagent` (so it can capture the JVM `Instrumentation` instance) AND as an OTel extension.
+To enable **hot reload** (runtime configuration updates without restart), the extension JAR must be added as a `-javaagent` (so it can capture the JVM `Instrumentation` instance) AND as an OTel extension.
 
 ```bash
 java \
@@ -124,6 +124,8 @@ java \
   -Dotel.exporter.otlp.protocol=grpc \
   -jar my-application.jar
 ```
+
+> **Note:** The second `-javaagent` flag is required for hot reload functionality. Without it, the extension will still work for static instrumentation but `reloadConfiguration()` via JMX will not be able to retransform already-loaded classes.
 
 ### 4. View Traces
 
@@ -449,17 +451,25 @@ java \
 | `instrumentation.config.path` | `/opt/otel/config/instrumentation.json` | Path to the JSON config file |
 | `otel.javaagent.extensions` | — | Path to this extension JAR |
 
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INSTRUMENTATION_CONFIG_PATH` | `/opt/otel/config/instrumentation.json` | Alternative way to specify config path (overrides default, but system property takes precedence) |
+
 ---
 
 ## JMX Management
 
 The extension registers a JMX MBean at `com.otel.dynamic:type=ConfigManager`.
 
+> **Note:** MBean registration is deferred by ~30 seconds after JVM startup to allow application servers (like WildFly/JBoss) to fully initialize. This avoids classloader conflicts during the startup phase.
+
 ### Operations
 
 | Operation | Description |
 |-----------|-------------|
-| `reloadConfiguration()` | Reload `instrumentation.json` from disk |
+| `reloadConfiguration()` | Reload `instrumentation.json` from disk and retransform classes |
 | `setDebugEnabled(boolean)` | Enable/disable debug logging |
 
 ### Attributes
@@ -471,11 +481,31 @@ The extension registers a JMX MBean at `com.otel.dynamic:type=ConfigManager`.
 | `InstrumentationCount` | int | Number of method-level rules |
 | `InstrumentedClassCount` | int | Number of instrumented classes |
 
+### Hot Reload via JMX
+
+When you call `reloadConfiguration()`, the extension:
+
+1. **Reloads** the JSON configuration from disk
+2. **Updates** the internal registry with new instrumentation rules
+3. **Retransforms** all loaded classes that match the new configuration (including via interface hierarchy)
+
+This allows you to add, remove, or modify instrumentation rules at runtime without restarting the application.
+
 ### Access via JConsole
 
 1. Open JConsole and connect to your Java process
 2. Navigate to **MBeans** → `com.otel.dynamic` → `ConfigManager`
 3. Invoke operations or read attributes
+
+### Access via Command Line
+
+```bash
+# Using jcmd (recommended)
+jcmd <pid> JMX.invoke com.otel.dynamic:type=ConfigManager reloadConfiguration
+
+# Enable debug logging
+jcmd <pid> JMX.invoke com.otel.dynamic:type=ConfigManager setDebugEnabled true
+```
 
 ---
 
@@ -648,8 +678,9 @@ POST /api/orders (HTTP span from OTel auto-instrumentation)
 
 ## Further Reading
 
-- [DEVELOPMENT.md](DEVELOPMENT.md) — Development guide for contributors
+- [QUICKSTART.md](QUICKSTART.md) — Quick start guide with common commands
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Detailed architecture and instrumentation flow diagrams
+- [ROADMAP.md](ROADMAP.md) — Planned features and enhancements
 - [OpenTelemetry Java Agent Extensions](https://opentelemetry.io/docs/zero-code/java/agent/extensions/)
 - [ByteBuddy Documentation](https://bytebuddy.net/)
 - [OpenTelemetry Java Instrumentation](https://github.com/open-telemetry/opentelemetry-java-instrumentation)
