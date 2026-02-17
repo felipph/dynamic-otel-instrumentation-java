@@ -5,6 +5,7 @@ import com.otel.dynamic.config.ConfigurationManager;
 import com.otel.dynamic.config.model.AttributeDefinition;
 import com.otel.dynamic.config.model.InstrumentationConfig;
 import com.otel.dynamic.config.model.MethodConfig;
+import com.otel.dynamic.config.model.ReturnValueAttribute;
 import com.otel.dynamic.agent.DynamicInstrumentationConfig;
 import com.otel.dynamic.util.Logger;
 
@@ -172,6 +173,16 @@ public class ConfigManager implements ConfigManagerMBean {
                         }
                     }
                     DynamicInstrumentationConfig.register(mc.getClassName(), mc.getMethodName(), rules);
+
+                    // Register return value attribute extraction rules
+                    if (mc.getReturnValueAttributes() != null && !mc.getReturnValueAttributes().isEmpty()) {
+                        List<DynamicInstrumentationConfig.ReturnValueRule> returnRules = new ArrayList<>();
+                        for (ReturnValueAttribute attr : mc.getReturnValueAttributes()) {
+                            returnRules.add(new DynamicInstrumentationConfig.ReturnValueRule(
+                                    attr.getMethodCall(), attr.getAttributeName()));
+                        }
+                        DynamicInstrumentationConfig.registerReturn(mc.getClassName(), mc.getMethodName(), returnRules);
+                    }
                 }
                 Logger.info("DynamicInstrumentationConfig registry updated");
             }

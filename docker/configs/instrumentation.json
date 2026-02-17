@@ -191,7 +191,8 @@
       ],
       "returnValueAttributes": [
         { "methodCall": "getSku", "attributeName": "app.product_sku" },
-        { "methodCall": "getName", "attributeName": "app.product_name" }
+        { "methodCall": "getName", "attributeName": "app.product_name" },
+        { "methodCall": "getPrice", "attributeName": "app.product_price" }
       ]
     },
     {
