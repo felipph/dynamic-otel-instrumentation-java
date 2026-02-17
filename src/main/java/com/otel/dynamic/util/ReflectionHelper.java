@@ -153,4 +153,37 @@ public class ReflectionHelper {
     public static String safeToString(Object obj) {
         return obj != null ? obj.toString() : "null";
     }
+
+    /**
+     * Invoke a chain of methods on a target object safely.
+     *
+     * Supports syntax like "getCustomer.getAddress.getCity" where each method
+     * in the chain is called on the result of the previous method.
+     *
+     * @param target the object to start the chain on
+     * @param methodChain dot-separated method names (e.g., "getCustomer.getAddress.getCity")
+     * @return an Optional containing the final result, or empty if any step failed
+     */
+    public static Optional<Object> invokeMethodChain(Object target, String methodChain) {
+        if (target == null || methodChain == null || methodChain.isEmpty()) {
+            Logger.debug("Invalid chain invocation: target=" + target + ", methodChain=" + methodChain);
+            return Optional.empty();
+        }
+
+        Object current = target;
+        for (String methodName : methodChain.split("\\.")) {
+            if (current == null) {
+                Logger.debug("Chain terminated early: null result for method in chain: " + methodChain);
+                return Optional.empty();
+            }
+            Optional<Object> result = invokeMethodSafely(current, methodName.trim());
+            if (!result.isPresent()) {
+                Logger.debug("Chain invocation failed at method: " + methodName.trim() + " on class: " + current.getClass().getName());
+                return Optional.empty();
+            }
+            current = result.get();
+        }
+
+        return Optional.ofNullable(current);
+    }
 }

@@ -15,6 +15,20 @@
 - [x] Logging de debug configurável via JMX
 - [x] Compatibilidade com JBoss/WildFly, Tomcat, Spring Boot
 - [x] Docker Compose para ambiente de desenvolvimento
+- [x] **Captura de Retorno de Métodos**
+  - Extrair atributos do valor retornado pelo método
+  - Sintaxe:
+    ```json
+    {
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.order_id" }
+      ]
+    }
+    ```
+- [x] **Extração de Atributos em Cadeia**
+  - Suporte a chamadas de métodos encadeadas
+  - Exemplo: `obj.getMethod1().getMethod2().getMethod3()`
+  - Sintaxe: `"methodCall": "getCustomer.getAddress.getCity"`
 
 ---
 
@@ -22,22 +36,14 @@
 
 ### Alta Prioridade
 
-- [ ] **Captura de Retorno de Métodos**
-  - Extrair atributos do valor retornado pelo método
-  - Sintaxe proposta:
-    ```json
-    {
-      "returnValue": {
-        "methodCall": "getId",
-        "attributeName": "app.returned_id"
-      }
-    }
-    ```
-
-- [ ] **Extração de Atributos em Cadeia**
-  - Suporte a chamadas de métodos encadeadas
-  - Exemplo: `obj.getMethod1().getMethod2().getMethod3()`
-  - Sintaxe proposta: `"methodCall": "getCustomer.getAddress.getCity"`
+- [ ] Projetos springboot(>=3.5) de exemplo(não precisa ser um para cada cenário. Você pode mesclar cenários em um único projeto desde que um não interfira no outro) incluindo um arquivo de instrumentação para validar as funcionalidades de instrumentação implementadas
+  - [ ] Usando Spring WEB MVC
+  - [ ] Usando Spring Reactive Web
+  - [ ] Usando Spring Batch
+  - [ ] Usando Virtual Threads
+  - [ ] Usando Async Methods
+  - [ ] Usando Reactor
+- [ ] Docker compose contendo com profiles para diferentes ambientes de execução. Um para jboss, outro para o springboot. O profile padrão deve incluir somente o jagger. Postgres pode existir para os profiles jboss ou springboot.
 
 ### Média Prioridade
 - [ ] **Interface Web de Gerenciamento**

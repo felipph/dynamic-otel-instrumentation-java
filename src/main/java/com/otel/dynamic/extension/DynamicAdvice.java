@@ -7,7 +7,9 @@ import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Scope;
 import net.bytebuddy.asm.Advice;
+import net.bytebuddy.implementation.bytecode.assign.Assigner;
 import com.otel.dynamic.agent.DynamicInstrumentationConfig;
+import com.otel.dynamic.util.ReflectionHelper;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -36,7 +38,8 @@ public class DynamicAdvice {
             @Advice.Origin("#t") String className,
             @Advice.Origin("#m") String methodName,
             @Advice.AllArguments Object[] args,
-            @Advice.Local("otelSpan") Span span) {
+            @Advice.Local("otelSpan") Span span,
+            @Advice.Local("returnRules") List<DynamicInstrumentationConfig.ReturnValueRule> returnRules) {
 
         // #t returns internal name with slashes (e.g. com/sample/app/Foo), convert to dots
         String dotClassName = className.replace('/', '.');
@@ -84,6 +87,10 @@ public class DynamicAdvice {
                 // skip
             }
         }
+
+        // Store return value rules for use in onExit
+        returnRules = DynamicInstrumentationConfig.getReturnRulesForHierarchy(dotClassName, methodName);
+
         if (rules != null && args != null) {
             for (DynamicInstrumentationConfig.AttributeRule rule : rules) {
                 try {
@@ -96,7 +103,13 @@ public class DynamicAdvice {
                         // No methodCall or "toString" -> use the argument value directly
                         if (methodCallName == null || methodCallName.isEmpty() || "toString".equals(methodCallName)) {
                             value = arg.toString();
+                        } else if (methodCallName.contains(".")) {
+                            // Chained method call: use ReflectionHelper for traversal
+                            value = ReflectionHelper.invokeMethodChain(arg, methodCallName)
+                                    .map(Object::toString)
+                                    .orElse(null);
                         } else {
+                            // Single method call (existing logic)
                             Method m = arg.getClass().getMethod(methodCallName);
                             Object result = m.invoke(arg);
                             value = result != null ? result.toString() : null;
@@ -117,7 +130,9 @@ public class DynamicAdvice {
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void onExit(
+            @Advice.Return(typing = Assigner.Typing.DYNAMIC, readOnly = false) Object returnValue,
             @Advice.Local("otelSpan") Span span,
+            @Advice.Local("returnRules") List<DynamicInstrumentationConfig.ReturnValueRule> returnRules,
             @Advice.Enter Scope scope,
             @Advice.Thrown Throwable throwable) {
 
@@ -126,6 +141,36 @@ public class DynamicAdvice {
         }
 
         if (span != null) {
+            // Extract return value attributes
+            if (returnRules != null && returnValue != null) {
+                for (DynamicInstrumentationConfig.ReturnValueRule rule : returnRules) {
+                    try {
+                        String methodCallName = rule.getMethodCall();
+                        String value;
+
+                        if (methodCallName == null || methodCallName.isEmpty() || "toString".equals(methodCallName)) {
+                            value = returnValue.toString();
+                        } else if (methodCallName.contains(".")) {
+                            // Chained method call
+                            value = ReflectionHelper.invokeMethodChain(returnValue, methodCallName)
+                                    .map(Object::toString)
+                                    .orElse(null);
+                        } else {
+                            // Single method call
+                            Method m = returnValue.getClass().getMethod(methodCallName);
+                            Object result = m.invoke(returnValue);
+                            value = result != null ? result.toString() : null;
+                        }
+
+                        if (value != null) {
+                            span.setAttribute(rule.getAttributeName(), value);
+                        }
+                    } catch (Exception ignored) {
+                        // Silently skip attribute extraction failures
+                    }
+                }
+            }
+
             if (throwable != null) {
                 span.setStatus(StatusCode.ERROR, throwable.getMessage());
                 span.recordException(throwable);

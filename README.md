@@ -10,12 +10,13 @@ A **configuration-driven** extension for the [OpenTelemetry Java Agent](https://
 2. [Quick Start](#quick-start)
 3. [Configuration Reference](#configuration-reference)
 4. [Instrumentation Modes](#instrumentation-modes)
-5. [Span Attributes](#span-attributes)
-6. [Deployment with Docker](#deployment-with-docker)
-7. [JMX Management](#jmx-management)
-8. [Troubleshooting](#troubleshooting)
-9. [Full Examples](#full-examples)
-10. [Further Reading](#further-reading)
+5. [Advanced Attribute Extraction](#advanced-attribute-extraction)
+6. [Span Attributes](#span-attributes)
+7. [Deployment with Docker](#deployment-with-docker)
+8. [JMX Management](#jmx-management)
+9. [Troubleshooting](#troubleshooting)
+10. [Full Examples](#full-examples)
+11. [Further Reading](#further-reading)
 
 ---
 
@@ -34,6 +35,8 @@ This project builds a JAR that plugs into the official **OpenTelemetry Java Agen
 | **Interface-Aware** | Configure an interface — all implementations are instrumented automatically |
 | **Interface Detection** | Spans carry a `code.instrumented.interface` attribute when the match came from an interface |
 | **Custom Attribute Extraction** | Extract method arguments into span attributes via reflection |
+| **Chained Method Calls** | Navigate object graphs with `getCustomer.getAddress.getCity` syntax |
+| **Return Value Capture** | Extract attributes from method return values |
 | **ClassLoader Safe** | Runs as an OTel Agent extension — classloader isolation handled automatically |
 | **JMX Management** | Runtime control via JMX MBeans |
 
@@ -194,13 +197,21 @@ Each entry targets a **specific class and method** with optional custom attribut
 | `className` | String | **Yes** | Fully qualified class or interface name |
 | `methodName` | String | **Yes** | Method name to instrument |
 | `attributes` | AttributeDefinition[] | No | Custom attributes to extract from method arguments |
+| `returnValueAttributes` | ReturnValueAttribute[] | No | Attributes to extract from the method's return value |
 
 #### `AttributeDefinition`
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `argIndex` | int | **Yes** | 0-based index of the method argument |
-| `methodCall` | String | No | Method to invoke on the argument (e.g., `getId`). If omitted or `"toString"`, uses `arg.toString()` |
+| `methodCall` | String | No | Method to invoke on the argument. Supports **chained calls** with dot notation (e.g., `getCustomer.getAddress.getCity`). If omitted or `"toString"`, uses `arg.toString()` |
+| `attributeName` | String | **Yes** | Name of the span attribute to set |
+
+#### `ReturnValueAttribute`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `methodCall` | String | No | Method to invoke on the return value. Supports **chained calls** with dot notation (e.g., `getId`). If omitted or `"toString"`, uses `returnValue.toString()` |
 | `attributeName` | String | **Yes** | Name of the span attribute to set |
 
 **Example — Extract customer ID from first argument:**
@@ -234,6 +245,62 @@ Each entry targets a **specific class and method** with optional custom attribut
 {
   "attributes": [
     { "argIndex": 0, "attributeName": "app.product_id" }
+  ]
+}
+```
+
+**Example — Chained method calls on argument:**
+
+```json
+{
+  "instrumentations": [
+    {
+      "className": "com.myapp.service.OrderService",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomer.getAddress.getCity", "attributeName": "app.customer_city" },
+        { "argIndex": 0, "methodCall": "getCustomer.getAddress.getState", "attributeName": "app.customer_state" }
+      ]
+    }
+  ]
+}
+```
+
+**Example — Extract attributes from return value:**
+
+```json
+{
+  "instrumentations": [
+    {
+      "className": "com.myapp.service.OrderService",
+      "methodName": "createOrder",
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.order_id" },
+        { "methodCall": "getOrderNumber", "attributeName": "app.order_number" },
+        { "methodCall": "getStatus.name", "attributeName": "app.order_status" }
+      ]
+    }
+  ]
+}
+```
+
+**Example — Combined: argument attributes + return value attributes:**
+
+```json
+{
+  "instrumentations": [
+    {
+      "className": "com.myapp.service.OrderService",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.customer_id" },
+        { "argIndex": 0, "methodCall": "getCustomer.getAddress.getCity", "attributeName": "app.customer_city" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.order_id" },
+        { "methodCall": "getTotalAmount", "attributeName": "app.order_total" }
+      ]
+    }
   ]
 }
 ```
@@ -338,6 +405,74 @@ In this example:
 
 ---
 
+## Advanced Attribute Extraction
+
+### Chained Method Calls
+
+The `methodCall` field supports **dot notation** for navigating object graphs. This allows you to traverse nested objects to extract deeply nested values.
+
+**Syntax:** `method1.method2.method3` invokes methods sequentially, where each method is called on the result of the previous one.
+
+**Example:** Extract the customer's city from a nested address object:
+
+```json
+{
+  "attributes": [
+    { "argIndex": 0, "methodCall": "getCustomer.getAddress.getCity", "attributeName": "app.customer_city" }
+  ]
+}
+```
+
+This is equivalent to: `orderRequest.getCustomer().getAddress().getCity()`
+
+**Error Handling:** If any method in the chain returns `null` or throws an exception, the attribute is silently skipped (no error is propagated to your application).
+
+### Return Value Capture
+
+The `returnValueAttributes` array lets you extract attributes from the value returned by the instrumented method. This is useful for capturing IDs, status codes, or other data generated during method execution.
+
+**Example:** Capture order ID and status from the returned Order object:
+
+```json
+{
+  "instrumentations": [
+    {
+      "className": "com.myapp.service.OrderService",
+      "methodName": "createOrder",
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.order_id" },
+        { "methodCall": "getStatus.name", "attributeName": "app.order_status" }
+      ]
+    }
+  ]
+}
+```
+
+**Note:** Return value attributes are added to the span **after** the method completes (in the `@Advice.OnMethodExit` phase). If the method throws an exception, no return value attributes are captured.
+
+**Combining with Argument Attributes:**
+
+```json
+{
+  "instrumentations": [
+    {
+      "className": "com.myapp.service.OrderService",
+      "methodName": "processPayment",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getOrderId", "attributeName": "app.input.order_id" },
+        { "argIndex": 0, "methodCall": "getAmount", "attributeName": "app.input.amount" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getTransactionId", "attributeName": "app.output.transaction_id" },
+        { "methodCall": "isApproved", "attributeName": "app.output.approved" }
+      ]
+    }
+  ]
+}
+```
+
+---
+
 ## Span Attributes
 
 Every instrumented method produces a span with these **automatic attributes**:
@@ -348,7 +483,7 @@ Every instrumented method produces a span with these **automatic attributes**:
 | `code.function` | Method name | `createOrder` |
 | `code.instrumented.interface` | *(Only if matched via interface)* The interface name | `com.myapp.service.IOrderService` |
 
-Plus any **custom attributes** defined in the `attributes` array of the method-level config.
+Plus any **custom attributes** defined in the `attributes` array (extracted from method arguments) and `returnValueAttributes` array (extracted from the return value) of the method-level config.
 
 ### Span Naming
 
@@ -565,7 +700,7 @@ grep "Package:" /path/to/logs/server.log
 
 ### Example 1: Spring Boot Microservice
 
-Instrument all `@Service` and `@Repository` classes, plus extract order details:
+Instrument all `@Service` and `@Repository` classes, plus extract order details with chained calls and return values:
 
 ```json
 {
@@ -585,8 +720,14 @@ Instrument all `@Service` and `@Repository` classes, plus extract order details:
       "methodName": "createOrder",
       "attributes": [
         { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.customer_id" },
+        { "argIndex": 0, "methodCall": "getCustomer.getAddress.getCity", "attributeName": "app.customer_city" },
         { "argIndex": 0, "methodCall": "getPaymentMethod", "attributeName": "app.payment_method" },
         { "argIndex": 0, "methodCall": "getTotalAmount", "attributeName": "app.total_amount" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.order_id" },
+        { "methodCall": "getOrderNumber", "attributeName": "app.order_number" },
+        { "methodCall": "getStatus.name", "attributeName": "app.order_status" }
       ]
     },
     {
@@ -594,6 +735,9 @@ Instrument all `@Service` and `@Repository` classes, plus extract order details:
       "methodName": "save",
       "attributes": [
         { "argIndex": 0, "methodCall": "getId", "attributeName": "app.order_id" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.saved_order_id" }
       ]
     }
   ]
@@ -662,7 +806,14 @@ POST /api/orders (HTTP span from OTel auto-instrumentation)
           ├── code.function = createOrder
           ├── code.instrumented.interface = com.myapp.service.IOrderService
           ├── app.customer_id = 42
+          ├── app.customer_city = São Paulo
           ├── app.payment_method = CREDIT_CARD
+          ├── app.total_amount = 199.99
+          │
+          │  (return value attributes added on method exit)
+          ├── app.order_id = 1001
+          ├── app.order_number = ORD-2024-001
+          ├── app.order_status = CONFIRMED
           │
           ├── OrderValidator.validateOrder
           │   └── code.instrumented.interface = com.myapp.service.IOrderService
@@ -671,7 +822,8 @@ POST /api/orders (HTTP span from OTel auto-instrumentation)
           │   └── app.item_count = 3
           │
           └── OrderRepository.save
-              └── app.order_id = 1001
+              ├── app.order_id = 1001
+              └── app.saved_order_id = 1001
 ```
 
 ---

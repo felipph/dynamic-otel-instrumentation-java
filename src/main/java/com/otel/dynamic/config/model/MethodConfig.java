@@ -17,11 +17,14 @@ public class MethodConfig {
 
     private List<AttributeDefinition> attributes;
 
+    private List<ReturnValueAttribute> returnValueAttributes;
+
     /**
      * Default constructor for JSON deserialization
      */
     public MethodConfig() {
         this.attributes = new ArrayList<>();
+        this.returnValueAttributes = new ArrayList<>();
     }
 
     /**
@@ -31,6 +34,7 @@ public class MethodConfig {
         this.className = className;
         this.methodName = methodName;
         this.attributes = new ArrayList<>();
+        this.returnValueAttributes = new ArrayList<>();
     }
 
     /**
@@ -40,6 +44,18 @@ public class MethodConfig {
         this.className = className;
         this.methodName = methodName;
         this.attributes = attributes != null ? attributes : new ArrayList<>();
+        this.returnValueAttributes = new ArrayList<>();
+    }
+
+    /**
+     * Constructor with all fields including return value attributes
+     */
+    public MethodConfig(String className, String methodName, List<AttributeDefinition> attributes,
+                        List<ReturnValueAttribute> returnValueAttributes) {
+        this.className = className;
+        this.methodName = methodName;
+        this.attributes = attributes != null ? attributes : new ArrayList<>();
+        this.returnValueAttributes = returnValueAttributes != null ? returnValueAttributes : new ArrayList<>();
     }
 
     // Getters and Setters
@@ -68,6 +84,14 @@ public class MethodConfig {
         this.attributes = attributes != null ? attributes : new ArrayList<>();
     }
 
+    public List<ReturnValueAttribute> getReturnValueAttributes() {
+        return returnValueAttributes;
+    }
+
+    public void setReturnValueAttributes(List<ReturnValueAttribute> returnValueAttributes) {
+        this.returnValueAttributes = returnValueAttributes != null ? returnValueAttributes : new ArrayList<>();
+    }
+
     /**
      * Add an attribute definition to this method config
      */
@@ -78,12 +102,23 @@ public class MethodConfig {
         this.attributes.add(attribute);
     }
 
+    /**
+     * Add a return value attribute definition to this method config
+     */
+    public void addReturnValueAttribute(ReturnValueAttribute returnValueAttribute) {
+        if (this.returnValueAttributes == null) {
+            this.returnValueAttributes = new ArrayList<>();
+        }
+        this.returnValueAttributes.add(returnValueAttribute);
+    }
+
     @Override
     public String toString() {
         return "MethodConfig{" +
                 "className='" + className + '\'' +
                 ", methodName='" + methodName + '\'' +
                 ", attributes=" + attributes +
+                ", returnValueAttributes=" + returnValueAttributes +
                 '}';
     }
 
@@ -96,7 +131,8 @@ public class MethodConfig {
 
         if (!Objects.equals(className, that.className)) return false;
         if (!Objects.equals(methodName, that.methodName)) return false;
-        return Objects.equals(attributes, that.attributes);
+        if (!Objects.equals(attributes, that.attributes)) return false;
+        return Objects.equals(returnValueAttributes, that.returnValueAttributes);
     }
 
     @Override
@@ -104,6 +140,7 @@ public class MethodConfig {
         int result = className != null ? className.hashCode() : 0;
         result = 31 * result + (methodName != null ? methodName.hashCode() : 0);
         result = 31 * result + (attributes != null ? attributes.hashCode() : 0);
+        result = 31 * result + (returnValueAttributes != null ? returnValueAttributes.hashCode() : 0);
         return result;
     }
 }

@@ -48,6 +48,11 @@
       "attributes": [
         { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.service.customer_id" },
         { "argIndex": 0, "methodCall": "getPaymentMethod", "attributeName": "app.service.payment_method" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.order_id" },
+        { "methodCall": "getOrderNumber", "attributeName": "app.order_number" },
+        { "methodCall": "getStatus.name", "attributeName": "app.order_status" }
       ]
     },
     {
@@ -183,6 +188,10 @@
       "methodName": "getProduct",
       "attributes": [
         { "argIndex": 0, "attributeName": "app.service.product_id" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getSku", "attributeName": "app.product_sku" },
+        { "methodCall": "getName", "attributeName": "app.product_name" }
       ]
     },
     {

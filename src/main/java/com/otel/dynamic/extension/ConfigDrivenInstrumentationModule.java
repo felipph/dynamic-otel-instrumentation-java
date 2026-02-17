@@ -4,6 +4,7 @@ import com.google.auto.service.AutoService;
 import com.otel.dynamic.config.ConfigurationManager;
 import com.otel.dynamic.config.model.AttributeDefinition;
 import com.otel.dynamic.config.model.MethodConfig;
+import com.otel.dynamic.config.model.ReturnValueAttribute;
 import com.otel.dynamic.jmx.ConfigManager;
 import com.otel.dynamic.util.Logger;
 import com.otel.dynamic.agent.DynamicInstrumentationConfig;
@@ -12,9 +13,7 @@ import io.opentelemetry.javaagent.extension.instrumentation.TypeInstrumentation;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * OpenTelemetry Java Agent extension module for configuration-driven instrumentation.
@@ -58,13 +57,11 @@ public class ConfigDrivenInstrumentationModule extends InstrumentationModule {
 
         // Populate the DynamicInstrumentationConfig registry so the inlined advice
         // can access attribute extraction rules without needing ConfigurationManager/Jackson
-        Map<String, List<String>> classToMethods = new HashMap<>();
+        int configuredClasses = 0;
         if (configManager.getConfig() != null && configManager.getConfig().getInstrumentations() != null) {
             DynamicInstrumentationConfig.clear();
             for (MethodConfig mc : configManager.getConfig().getInstrumentations()) {
-                classToMethods
-                        .computeIfAbsent(mc.getClassName(), k -> new ArrayList<>())
-                        .add(mc.getMethodName());
+                configuredClasses++;
 
                 // Convert AttributeDefinitions to simple AttributeRules (no Jackson dependency)
                 List<DynamicInstrumentationConfig.AttributeRule> rules = new ArrayList<>();
@@ -75,37 +72,32 @@ public class ConfigDrivenInstrumentationModule extends InstrumentationModule {
                     }
                 }
                 DynamicInstrumentationConfig.register(mc.getClassName(), mc.getMethodName(), rules);
+
+                // Register return value attribute extraction rules
+                if (mc.getReturnValueAttributes() != null && !mc.getReturnValueAttributes().isEmpty()) {
+                    List<DynamicInstrumentationConfig.ReturnValueRule> returnRules = new ArrayList<>();
+                    for (ReturnValueAttribute attr : mc.getReturnValueAttributes()) {
+                        returnRules.add(new DynamicInstrumentationConfig.ReturnValueRule(
+                                attr.getMethodCall(), attr.getAttributeName()));
+                    }
+                    DynamicInstrumentationConfig.registerReturn(mc.getClassName(), mc.getMethodName(), returnRules);
+                }
             }
         }
 
-        Logger.info("Dynamic instrumentation: " + classToMethods.size() + " classes configured");
+        Logger.info("Dynamic instrumentation: " + configuredClasses + " method rules configured");
 
         List<TypeInstrumentation> instrumentations = new ArrayList<>();
 
-        // IMPORTANT: Always register GlobalTypeInstrumentation first.
-        // This provides dynamic matching based on ConfigurationManager, which enables
-        // hot-reload functionality. When configuration changes and retransformClasses()
-        // is called, the GlobalTypeInstrumentation will re-evaluate matches against
-        // the updated configuration.
+        // Use only GlobalTypeInstrumentation - it handles all matching logic:
+        // - Package-level instrumentation with annotation filtering
+        // - Explicit class/method configuration
+        // - Interface-based instrumentation (via hierarchy check)
+        //
+        // IMPORTANT: Do NOT add DynamicTypeInstrumentation or PackageTypeInstrumentation
+        // here, as they would cause duplicate instrumentation (same advice applied multiple times).
         instrumentations.add(new GlobalTypeInstrumentation());
-        Logger.info("  Registered GlobalTypeInstrumentation (dynamic matching enabled)");
-
-        // 1. Per-class instrumentations from the "instrumentations" section
-        for (Map.Entry<String, List<String>> entry : classToMethods.entrySet()) {
-            instrumentations.add(new DynamicTypeInstrumentation(entry.getKey(), entry.getValue()));
-            Logger.info("  Registered class instrumentation: " + entry.getKey()
-                    + " methods=" + entry.getValue());
-        }
-
-        // 2. Package-level instrumentations from the "packages" section
-        if (configManager.getConfig() != null && configManager.getConfig().getPackages() != null) {
-            for (com.otel.dynamic.config.model.PackageConfig pkg : configManager.getConfig().getPackages()) {
-                instrumentations.add(new PackageTypeInstrumentation(
-                        pkg.getPackageName(), pkg.isRecursive(), pkg.getAnnotations()));
-                Logger.info("  Registered package instrumentation: " + pkg.getPackageName()
-                        + " recursive=" + pkg.isRecursive());
-            }
-        }
+        Logger.info("  Registered GlobalTypeInstrumentation (handles all matching)");
 
         Logger.info("Total TypeInstrumentation instances: " + instrumentations.size());
         return instrumentations;
@@ -124,7 +116,9 @@ public class ConfigDrivenInstrumentationModule extends InstrumentationModule {
                 "com.otel.dynamic.extension.DynamicAdvice",
                 "com.otel.dynamic.agent.DynamicInstrumentationConfig",
                 "com.otel.dynamic.agent.DynamicInstrumentationConfig$AttributeRule",
-                "com.otel.dynamic.agent.DynamicInstrumentationConfig$RuleMatch"
+                "com.otel.dynamic.agent.DynamicInstrumentationConfig$RuleMatch",
+                "com.otel.dynamic.agent.DynamicInstrumentationConfig$ReturnValueRule",
+                "com.otel.dynamic.util.ReflectionHelper"
         );
     }
 }

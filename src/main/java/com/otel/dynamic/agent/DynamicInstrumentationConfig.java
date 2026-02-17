@@ -22,6 +22,7 @@ import java.util.List;
 public class DynamicInstrumentationConfig {
 
     private static final String PROP_PREFIX = "otel.dynamic.rules.";
+    private static final String RETURN_PROP_PREFIX = "otel.dynamic.return.";
 
     /**
      * Simple POJO representing a single attribute extraction rule.
@@ -40,6 +41,28 @@ public class DynamicInstrumentationConfig {
 
         public int getArgIndex() {
             return argIndex;
+        }
+
+        public String getMethodCall() {
+            return methodCall;
+        }
+
+        public String getAttributeName() {
+            return attributeName;
+        }
+    }
+
+    /**
+     * Simple POJO representing a return value attribute extraction rule.
+     * No external dependencies — safe for use in inlined advice.
+     */
+    public static class ReturnValueRule {
+        private final String methodCall;
+        private final String attributeName;
+
+        public ReturnValueRule(String methodCall, String attributeName) {
+            this.methodCall = methodCall;
+            this.attributeName = attributeName;
         }
 
         public String getMethodCall() {
@@ -102,6 +125,112 @@ public class DynamicInstrumentationConfig {
             }
         }
         return rules.isEmpty() ? null : rules;
+    }
+
+    /**
+     * Register return value attribute extraction rules for a specific class+method pair.
+     * Serializes the rules into a system property for cross-classloader access.
+     *
+     * Serialization format:
+     *   Key:   "otel.dynamic.return.{className}#{methodName}"
+     *   Value: "methodCall|attributeName;methodCall|attributeName;..."
+     *
+     * @param className  fully qualified class name (dot-separated)
+     * @param methodName method name
+     * @param rules      list of return value extraction rules
+     */
+    public static void registerReturn(String className, String methodName, List<ReturnValueRule> rules) {
+        if (rules != null && !rules.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < rules.size(); i++) {
+                if (i > 0) {
+                    sb.append(';');
+                }
+                ReturnValueRule r = rules.get(i);
+                sb.append(r.getMethodCall() != null ? r.getMethodCall() : "")
+                  .append('|')
+                  .append(r.getAttributeName());
+            }
+            System.setProperty(RETURN_PROP_PREFIX + className + "#" + methodName, sb.toString());
+        }
+    }
+
+    /**
+     * Look up return value extraction rules for a given class+method.
+     * Deserializes from the system property on each call.
+     *
+     * @param className  fully qualified class name (dot-separated)
+     * @param methodName method name
+     * @return list of rules, or null if none configured
+     */
+    public static List<ReturnValueRule> getReturnRules(String className, String methodName) {
+        String value = System.getProperty(RETURN_PROP_PREFIX + className + "#" + methodName);
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        List<ReturnValueRule> rules = new ArrayList<>();
+        String[] entries = value.split(";");
+        for (String entry : entries) {
+            String[] parts = entry.split("\\|", -1);
+            if (parts.length == 2) {
+                String methodCall = parts[0].isEmpty() ? null : parts[0];
+                String attributeName = parts[1];
+                rules.add(new ReturnValueRule(methodCall, attributeName));
+            }
+        }
+        return rules.isEmpty() ? null : rules;
+    }
+
+    /**
+     * Look up return value extraction rules by walking the class hierarchy.
+     * First tries the exact runtime class name, then checks all interfaces
+     * and superclasses.
+     *
+     * @param runtimeClassName the actual class name at runtime (dot-separated)
+     * @param methodName       method name
+     * @return list of rules, or null if none configured
+     */
+    public static List<ReturnValueRule> getReturnRulesForHierarchy(String runtimeClassName, String methodName) {
+        // Fast path: try exact class name first
+        List<ReturnValueRule> rules = getReturnRules(runtimeClassName, methodName);
+        if (rules != null) {
+            return rules;
+        }
+
+        // Walk the class hierarchy: interfaces and superclasses
+        try {
+            Class<?> clazz = Class.forName(runtimeClassName, false,
+                    Thread.currentThread().getContextClassLoader());
+
+            // Check all interfaces (including inherited ones)
+            for (Class<?> iface : clazz.getInterfaces()) {
+                rules = getReturnRules(iface.getName(), methodName);
+                if (rules != null) {
+                    return rules;
+                }
+            }
+
+            // Walk superclass chain
+            Class<?> superClass = clazz.getSuperclass();
+            while (superClass != null && superClass != Object.class) {
+                rules = getReturnRules(superClass.getName(), methodName);
+                if (rules != null) {
+                    return rules;
+                }
+                // Also check interfaces of the superclass
+                for (Class<?> iface : superClass.getInterfaces()) {
+                    rules = getReturnRules(iface.getName(), methodName);
+                    if (rules != null) {
+                        return rules;
+                    }
+                }
+                superClass = superClass.getSuperclass();
+            }
+        } catch (ClassNotFoundException ignored) {
+            // If we can't load the class, fall through to null
+        }
+
+        return null;
     }
 
     /**
@@ -206,7 +335,7 @@ public class DynamicInstrumentationConfig {
     public static void clear() {
         List<String> toRemove = new ArrayList<>();
         for (String key : System.getProperties().stringPropertyNames()) {
-            if (key.startsWith(PROP_PREFIX)) {
+            if (key.startsWith(PROP_PREFIX) || key.startsWith(RETURN_PROP_PREFIX)) {
                 toRemove.add(key);
             }
         }
