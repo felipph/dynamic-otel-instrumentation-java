@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: sample-microservices
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+server:
+  port: ${PORT:8080}
+
+app:
+  queue:
+    name: orders.queue
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.otel.sample: INFO
+    org.springframework.amqp: DEBUG

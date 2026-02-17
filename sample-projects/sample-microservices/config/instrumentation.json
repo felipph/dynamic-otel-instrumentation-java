@@ -1,0 +1,87 @@
+{
+  "packages": [
+    {
+      "packageName": "com.otel.sample.microservices.service",
+      "recursive": true,
+      "annotations": [
+        "org.springframework.stereotype.Service"
+      ]
+    },
+    {
+      "packageName": "com.otel.sample.microservices.messaging",
+      "recursive": true
+    }
+  ],
+  "instrumentations": [
+    {
+      "className": "com.otel.sample.microservices.controller.OrderController",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.customer_id" },
+        { "argIndex": 0, "methodCall": "getProductId", "attributeName": "app.product_id" },
+        { "argIndex": 0, "methodCall": "getQuantity", "attributeName": "app.quantity" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getBody.orderId", "attributeName": "app.order_id" },
+        { "methodCall": "getBody.status", "attributeName": "app.order_status" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.microservices.service.OrderService",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.input.customer_id" },
+        { "argIndex": 0, "methodCall": "getProductId", "attributeName": "app.input.product_id" },
+        { "argIndex": 0, "methodCall": "getQuantity", "attributeName": "app.input.quantity" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getOrderId", "attributeName": "app.output.order_id" },
+        { "methodCall": "getStatus", "attributeName": "app.output.status" },
+        { "methodCall": "getAmount", "attributeName": "app.output.amount" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.microservices.service.OrderService",
+      "methodName": "processOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getOrderId", "attributeName": "app.input.order_id" },
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.input.customer_id" },
+        { "argIndex": 0, "methodCall": "getAmount", "attributeName": "app.input.amount" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getOrderId", "attributeName": "app.output.order_id" },
+        { "methodCall": "getStatus", "attributeName": "app.output.status" },
+        { "methodCall": "getProcessedBy", "attributeName": "app.output.processed_by" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.microservices.messaging.OrderMessageProducer",
+      "methodName": "sendOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getOrderId", "attributeName": "messaging.order_id" },
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "messaging.customer_id" },
+        { "argIndex": 0, "methodCall": "getStatus", "attributeName": "messaging.order_status" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.microservices.messaging.OrderMessageConsumer",
+      "methodName": "receiveOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getOrderId", "attributeName": "messaging.order_id" },
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "messaging.customer_id" },
+        { "argIndex": 0, "methodCall": "getAmount", "attributeName": "messaging.amount" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.microservices.repository.OrderRepository",
+      "methodName": "save",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getOrderId", "attributeName": "db.order_id" },
+        { "argIndex": 0, "methodCall": "getStatus", "attributeName": "db.order_status" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getOrderId", "attributeName": "db.saved_order_id" }
+      ]
+    }
+  ]
+}

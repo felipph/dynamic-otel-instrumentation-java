@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # Jaeger - Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: jaeger-microservices
+    ports:
+      - "16686:16686"  # UI
+      - "14250:14250"  # Model
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.103.1
+    container_name: otel-collector-microservices
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./config/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      - jaeger
+
+  # RabbitMQ - Message Broker
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-microservices
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Microservice Instance 1 (Port 8080)
+  microservice-1:
+    build:
+      context: ../..
+      dockerfile: sample-projects/sample-microservices/Dockerfile
+    container_name: microservice-1
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - SPRING_APPLICATION_NAME=order-service-1
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - OTEL_SERVICE_NAME=order-service-1
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - JAVA_OPTS=-javaagent:/opt/otel/opentelemetry-javaagent.jar -Dotel.javaagent.extensions=/opt/otel/dynamic-instrumentation-agent.jar -Dinstrumentation.config.path=/opt/config/instrumentation.json
+    volumes:
+      - ../../target/dynamic-instrumentation-agent-1.0.0.jar:/opt/otel/dynamic-instrumentation-agent.jar:ro
+      - ./config/instrumentation.json:/opt/config/instrumentation.json:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  # Microservice Instance 2 (Port 8081)
+  microservice-2:
+    build:
+      context: ../..
+      dockerfile: sample-projects/sample-microservices/Dockerfile
+    container_name: microservice-2
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - SPRING_APPLICATION_NAME=order-service-2
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - OTEL_SERVICE_NAME=order-service-2
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - JAVA_OPTS=-javaagent:/opt/otel/opentelemetry-javaagent.jar -Dotel.javaagent.extensions=/opt/otel/dynamic-instrumentation-agent.jar -Dinstrumentation.config.path=/opt/config/instrumentation.json
+    volumes:
+      - ../../target/dynamic-instrumentation-agent-1.0.0.jar:/opt/otel/dynamic-instrumentation-agent.jar:ro
+      - ./config/instrumentation.json:/opt/config/instrumentation.json:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+networks:
+  default:
+    name: microservices-network
