@@ -16,7 +16,8 @@ A **configuration-driven** extension for the [OpenTelemetry Java Agent](https://
 8. [JMX Management](#jmx-management)
 9. [Troubleshooting](#troubleshooting)
 10. [Full Examples](#full-examples)
-11. [Further Reading](#further-reading)
+11. [Sample Projects](#sample-projects)
+12. [Further Reading](#further-reading)
 
 ---
 
@@ -828,11 +829,47 @@ POST /api/orders (HTTP span from OTel auto-instrumentation)
 
 ---
 
+## Sample Projects
+
+This repository includes three sample Spring Boot projects that demonstrate the instrumentation capabilities:
+
+| Project | Port | Description |
+|---------|------|-------------|
+| `sample-spring-webmvc` | 8080 | Traditional Spring WebMVC with JPA, Async methods, and Virtual Threads |
+| `sample-spring-webflux` | 8081 | Reactive Spring WebFlux with R2DBC and Reactor |
+| `sample-spring-batch` | 8082 | Spring Batch with chunk-oriented processing |
+
+### Quick Start with Sample Projects
+
+```bash
+# Build the extension
+./scripts/build.sh
+
+# Start the observability stack (Jaeger)
+./scripts/start-stack.sh
+
+# Start a sample project (WebMVC example)
+cd sample-projects/sample-spring-webmvc
+./scripts/run.sh
+
+# Test the instrumentation
+./scripts/test.sh
+```
+
+### View Traces
+
+Open Jaeger at http://localhost:16686 and search for the sample service.
+
+For detailed instructions, see [USING-SAMPLE-PROJECTS.md](USING-SAMPLE-PROJECTS.md).
+
+---
+
 ## Further Reading
 
 - [QUICKSTART.md](QUICKSTART.md) — Quick start guide with common commands
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Detailed architecture and instrumentation flow diagrams
 - [ROADMAP.md](ROADMAP.md) — Planned features and enhancements
+- [USING-SAMPLE-PROJECTS.md](USING-SAMPLE-PROJECTS.md) — Guide to using the sample projects
 - [OpenTelemetry Java Agent Extensions](https://opentelemetry.io/docs/zero-code/java/agent/extensions/)
 - [ByteBuddy Documentation](https://bytebuddy.net/)
 - [OpenTelemetry Java Instrumentation](https://github.com/open-telemetry/opentelemetry-java-instrumentation)

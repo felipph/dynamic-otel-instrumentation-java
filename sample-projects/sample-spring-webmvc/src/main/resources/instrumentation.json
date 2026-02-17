@@ -1,0 +1,95 @@
+{
+  "packages": [
+    {
+      "packageName": "com.otel.sample.webmvc",
+      "recursive": true,
+      "annotations": [
+        "org.springframework.stereotype.Service",
+        "org.springframework.stereotype.Repository",
+        "org.springframework.web.bind.annotation.RestController"
+      ]
+    }
+  ],
+  "instrumentations": [
+    {
+      "className": "com.otel.sample.webmvc.service.CustomerService",
+      "methodName": "createCustomer",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getEmail", "attributeName": "app.customer.email" },
+        { "argIndex": 0, "methodCall": "getFirstName", "attributeName": "app.customer.first_name" },
+        { "argIndex": 0, "methodCall": "getLastName", "attributeName": "app.customer.last_name" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.customer.created_id" },
+        { "methodCall": "getEmail", "attributeName": "app.customer.created_email" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webmvc.service.CustomerService",
+      "methodName": "getCustomerById",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.customer.requested_id" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webmvc.service.OrderService",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.order.customer_id" },
+        { "argIndex": 0, "methodCall": "getItems.size", "attributeName": "app.order.item_count" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.order.created_id" },
+        { "methodCall": "getOrderNumber", "attributeName": "app.order.order_number" },
+        { "methodCall": "getStatus.name", "attributeName": "app.order.status" },
+        { "methodCall": "getTotalAmount", "attributeName": "app.order.total" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webmvc.service.OrderService",
+      "methodName": "getOrderById",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.order.requested_id" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webmvc.service.ProductService",
+      "methodName": "createProduct",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getSku", "attributeName": "app.product.sku" },
+        { "argIndex": 0, "methodCall": "getName", "attributeName": "app.product.name" },
+        { "argIndex": 0, "methodCall": "getPrice", "attributeName": "app.product.price" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.product.created_id" },
+        { "methodCall": "getSku", "attributeName": "app.product.created_sku" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webmvc.service.PaymentService",
+      "methodName": "processPaymentAsync",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.payment.order_id" },
+        { "argIndex": 1, "attributeName": "app.payment.amount" },
+        { "argIndex": 2, "attributeName": "app.payment.method" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webmvc.controller.PaymentController",
+      "methodName": "processPayment",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.payment.order_id" },
+        { "argIndex": 1, "attributeName": "app.payment.amount" },
+        { "argIndex": 2, "attributeName": "app.payment.method" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webmvc.service.PaymentService",
+      "methodName": "calculateShipping",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.shipping.zipcode" },
+        { "argIndex": 1, "attributeName": "app.shipping.order_total" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "packages": [
+    {
+      "packageName": "com.otel.sample.batch",
+      "recursive": true,
+      "annotations": [
+        "org.springframework.stereotype.Component",
+        "org.springframework.stereotype.Service"
+      ]
+    }
+  ],
+  "instrumentations": [
+    {
+      "className": "com.otel.sample.batch.reader.TransactionReader",
+      "methodName": "read",
+      "returnValueAttributes": [
+        { "methodCall": "getTransactionId", "attributeName": "app.batch.txn_id" },
+        { "methodCall": "getAccountNumber", "attributeName": "app.batch.account" },
+        { "methodCall": "getAmount", "attributeName": "app.batch.amount" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.batch.processor.TransactionProcessor",
+      "methodName": "process",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getTransactionId", "attributeName": "app.batch.processor.txn_id" },
+        { "argIndex": 0, "methodCall": "getAccountNumber", "attributeName": "app.batch.processor.account" },
+        { "argIndex": 0, "methodCall": "getAbsoluteAmount", "attributeName": "app.batch.processor.abs_amount" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getStatus", "attributeName": "app.batch.processor.result_status" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.batch.writer.TransactionWriter",
+      "methodName": "write",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "size", "attributeName": "app.batch.writer.chunk_size" }
+      ]
+    }
+  ]
+}

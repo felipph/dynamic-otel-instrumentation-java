@@ -29,6 +29,12 @@
   - Suporte a chamadas de métodos encadeadas
   - Exemplo: `obj.getMethod1().getMethod2().getMethod3()`
   - Sintaxe: `"methodCall": "getCustomer.getAddress.getCity"`
+- [x] **Projetos de Exemplo Spring Boot 3.x**
+  - [x] sample-spring-webmvc - Spring WebMVC com JPA, Async, Virtual Threads
+  - [x] sample-spring-webflux - Spring WebFlux com R2DBC e Reactive Streams
+  - [x] sample-spring-batch - Spring Batch com chunk-oriented processing
+  - [x] Scripts de teste para validação da instrumentação
+  - [x] Documentação de uso dos projetos de exemplo (USING-SAMPLE-PROJECTS.md)
 
 ---
 
@@ -36,13 +42,6 @@
 
 ### Alta Prioridade
 
-- [ ] Projetos springboot(>=3.5) de exemplo(não precisa ser um para cada cenário. Você pode mesclar cenários em um único projeto desde que um não interfira no outro) incluindo um arquivo de instrumentação para validar as funcionalidades de instrumentação implementadas
-  - [ ] Usando Spring WEB MVC
-  - [ ] Usando Spring Reactive Web
-  - [ ] Usando Spring Batch
-  - [ ] Usando Virtual Threads
-  - [ ] Usando Async Methods
-  - [ ] Usando Reactor
 - [ ] Docker compose contendo com profiles para diferentes ambientes de execução. Um para jboss, outro para o springboot. O profile padrão deve incluir somente o jagger. Postgres pode existir para os profiles jboss ou springboot.
 
 ### Média Prioridade

@@ -1,0 +1,43 @@
+{
+  "packages": [
+    {
+      "packageName": "com.otel.sample.webflux",
+      "recursive": true,
+      "annotations": [
+        "org.springframework.stereotype.Service",
+        "org.springframework.stereotype.Repository",
+        "org.springframework.web.bind.annotation.RestController"
+      ]
+    }
+  ],
+  "instrumentations": [
+    {
+      "className": "com.otel.sample.webflux.service.ProductService",
+      "methodName": "createProduct",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getSku", "attributeName": "app.product.sku" },
+        { "argIndex": 0, "methodCall": "getName", "attributeName": "app.product.name" },
+        { "argIndex": 0, "methodCall": "getPrice", "attributeName": "app.product.price" }
+      ],
+      "returnValueAttributes": [
+        { "methodCall": "getId", "attributeName": "app.product.created_id" },
+        { "methodCall": "getSku", "attributeName": "app.product.created_sku" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webflux.service.ProductService",
+      "methodName": "getProductById",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.product.requested_id" }
+      ]
+    },
+    {
+      "className": "com.otel.sample.webflux.service.ProductService",
+      "methodName": "updateStock",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.product.stock_product_id" },
+        { "argIndex": 1, "attributeName": "app.product.stock_delta" }
+      ]
+    }
+  ]
+}
