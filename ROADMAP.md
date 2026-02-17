@@ -33,6 +33,7 @@
   - [x] sample-spring-webmvc - Spring WebMVC com JPA, Async, Virtual Threads
   - [x] sample-spring-webflux - Spring WebFlux com R2DBC e Reactive Streams
   - [x] sample-spring-batch - Spring Batch com chunk-oriented processing
+  - [x] sample-microservices - Microserviços com HTTP e RabbitMQ
   - [x] Scripts de teste para validação da instrumentação
   - [x] Documentação de uso dos projetos de exemplo (USING-SAMPLE-PROJECTS.md)
 
