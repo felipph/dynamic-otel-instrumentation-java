@@ -15,8 +15,9 @@ Detailed diagrams showing how the Dynamic OpenTelemetry Instrumentation Extensio
 7. [Interface Detection Flow](#interface-detection-flow)
 8. [Attribute Extraction Flow](#attribute-extraction-flow)
 9. [Cross-Classloader Data Flow](#cross-classloader-data-flow)
-10. [Docker Deployment Topology](#docker-deployment-topology)
-11. [Configuration Model](#configuration-model)
+10. [Hot Reload Flow (Incremental Retransformation)](#hot-reload-flow-incremental-retransformation)
+11. [Docker Deployment Topology](#docker-deployment-topology)
+12. [Configuration Model](#configuration-model)
 
 ---
 
@@ -148,10 +149,23 @@ Detailed diagrams showing how the Dynamic OpenTelemetry Instrumentation Extensio
 │  │  • getRules()            → reads System property             │  │
 │  │  • findRulesForHierarchy → walks class hierarchy             │  │
 │  │  • clear()               → removes all rules                 │  │
+│  │  • computeChecksum()     → MD5 hash of rules                 │  │
+│  │  • getAllChecksums()     → snapshot for diff computation     │  │
 │  │                                                              │  │
 │  │  Inner classes:                                              │  │
 │  │  • AttributeRule  (argIndex, methodCall, attributeName)      │  │
 │  │  • RuleMatch      (sourceClassName, rules, fromInterface)    │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │              InstrumentationDiff                              │  │
+│  │              (Hot Reload Optimization)                        │  │
+│  │                                                              │  │
+│  │  • compute(old, new)     → diff between checksum snapshots   │  │
+│  │  • getAddedOrChanged()   → new/modified rules                │  │
+│  │  • getRemoved()          → deleted rules                     │  │
+│  │  • getUnchanged()        → rules with same checksum          │  │
+│  │  • hasChanges()          → quick check if retransform needed │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 │                                                                    │
 │  ┌──────────────────────────────────────────────────────────────┐  │
@@ -724,6 +738,142 @@ DynamicAdvice.onEnter() — after interface detection
 │  Deserializes to List<AttributeRule>                            │
 │  Returns RuleMatch(sourceClassName, rules, fromInterface=true)  │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Hot Reload Flow (Incremental Retransformation)
+
+The extension supports hot reload via JMX, allowing configuration changes at runtime without restarting the application. To minimize performance impact, it uses **checksum-based incremental retransformation**.
+
+### Overview
+
+```
+JMX: reloadConfiguration() called
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. SNAPSHOT: Capture current checksums                          │
+│                                                                 │
+│    oldChecksums = DynamicInstrumentationConfig.getAllChecksums()│
+│                                                                 │
+│    Returns map:                                                 │
+│    {                                                            │
+│      "com.myapp.Service#process" → "a1b2c3d4e5f6...",          │
+│      "com.myapp.Handler#handle" → "x9y8z7w6v5u4...",           │
+│      ...                                                        │
+│    }                                                            │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. RELOAD: Read new configuration from disk                     │
+│                                                                 │
+│    configManager.loadConfiguration()                            │
+│      → Reads instrumentation.json                               │
+│      → Parses into InstrumentationConfig                        │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. UPDATE: Populate new registry with checksums                 │
+│                                                                 │
+│    DynamicInstrumentationConfig.clear()                         │
+│    For each MethodConfig:                                       │
+│      DynamicInstrumentationConfig.register(                     │
+│        className, methodName, rules                             │
+│      )                                                          │
+│      → Stores rules in System property                          │
+│      → Computes MD5 checksum of serialized rules                │
+│      → Stores checksum in System property                       │
+│                                                                 │
+│    Checksum calculation:                                        │
+│      "0|getCustomerId|app.customer_id;0|getMethod|app.method"   │
+│                         ↓ MD5                                   │
+│      "a1b2c3d4e5f6789012345678abcdef01"                        │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. DIFF: Compute what changed                                   │
+│                                                                 │
+│    newChecksums = DynamicInstrumentationConfig.getAllChecksums()│
+│    diff = InstrumentationDiff.compute(oldChecksums, newChecksums)│
+│                                                                 │
+│    ┌─────────────────────────────────────────────────────────┐  │
+│    │ InstrumentationDiff                                      │  │
+│    │                                                          │  │
+│    │  addedOrChanged: Set<String>                             │  │
+│    │    → class#method entries that are new or have different │  │
+│    │      checksums (rules changed)                           │  │
+│    │                                                          │  │
+│    │  removed: Set<String>                                    │  │
+│    │    → class#method entries that existed before but not    │  │
+│    │      in new config                                       │  │
+│    │                                                          │  │
+│    │  unchanged: Set<String>                                  │  │
+│    │    → class#method entries with identical checksums       │  │
+│    │      (no retransformation needed)                        │  │
+│    └─────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│    Example diff:                                                │
+│    ┌─────────────────────────────────────────────────────────┐  │
+│    │ addedOrChanged:                                          │  │
+│    │   - "com.myapp.NewService#run"         (new entry)      │  │
+│    │   - "com.myapp.Service#process"        (checksum diff)  │  │
+│    │                                                          │  │
+│    │ removed:                                                 │  │
+│    │   - "com.myapp.OldService#execute"     (deleted)        │  │
+│    │                                                          │  │
+│    │ unchanged:                                               │  │
+│    │   - "com.myapp.Handler#handle"         (same checksum)  │  │
+│    │   - "com.myapp.Repo#save"              (same checksum)  │  │
+│    └─────────────────────────────────────────────────────────┘  │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. RETRANSFORM: Only affected classes                           │
+│                                                                 │
+│    if (!diff.hasChanges()) {                                    │
+│      // Nothing changed - skip retransformation entirely        │
+│      return;                                                    │
+│    }                                                            │
+│                                                                 │
+│    affectedClasses = diff.getAffected() // added + changed + rem│
+│                                                                 │
+│    For each loaded class:                                       │
+│      if (class is modifiable                                    │
+│          AND class matches affected class#method entries) {     │
+│        classesToRetransform.add(class)                          │
+│      }                                                          │
+│                                                                 │
+│    inst.retransformClasses(classesToRetransform)                │
+│    → ByteBuddy re-applies advice with new configuration         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Performance Impact
+
+| Scenario | Classes Retransformed | Impact |
+|----------|----------------------|--------|
+| Add 1 new method rule | ~1 class | Minimal |
+| Change 1 attribute | ~1 class | Minimal |
+| Reload unchanged config | 0 classes | None |
+| Full config replacement | All affected classes | Proportional |
+
+### Checksum Storage
+
+```
+System Property Keys:
+  otel.dynamic.rules.com.myapp.Service#process     → rules serialization
+  otel.dynamic.checksum.com.myapp.Service#process  → MD5 checksum
+
+Serialization format (rules):
+  "argIndex|methodCall|attributeName;argIndex|methodCall|attributeName;..."
+
+Checksum format:
+  "a1b2c3d4e5f6789012345678abcdef01" (32-char MD5 hex)
 ```
 
 ---

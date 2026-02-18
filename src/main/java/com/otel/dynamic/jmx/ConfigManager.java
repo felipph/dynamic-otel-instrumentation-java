@@ -1,6 +1,7 @@
 package com.otel.dynamic.jmx;
 
 import com.otel.dynamic.agent.InstrumentationAccessor;
+import com.otel.dynamic.agent.InstrumentationDiff;
 import com.otel.dynamic.config.ConfigurationManager;
 import com.otel.dynamic.config.model.AttributeDefinition;
 import com.otel.dynamic.config.model.InstrumentationConfig;
@@ -17,6 +18,7 @@ import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -143,14 +145,20 @@ public class ConfigManager implements ConfigManagerMBean {
     public boolean reloadConfiguration() {
         try {
             Logger.info("Configuration reload requested via JMX");
+
+            // 1. Snapshot current checksums before clearing
+            Map<String, String> oldChecksums = DynamicInstrumentationConfig.getAllChecksums();
+            Logger.debug("Snapshot of " + oldChecksums.size() + " existing instrumentation entries");
+
+            // 2. Reload configuration from file
             configManager.loadConfiguration();
-            
-            // 1. Update DynamicInstrumentationConfig registry
+
+            // 3. Update DynamicInstrumentationConfig registry (populates new checksums)
             updateDynamicRegistry();
-            
-            // 2. Trigger retransformation
-            retransformClasses();
-            
+
+            // 4. Compute diff and trigger incremental retransformation
+            retransformClassesIncremental(oldChecksums);
+
             return true;
         } catch (Exception e) {
             Logger.error("Failed to reload configuration via JMX", e);
@@ -191,7 +199,13 @@ public class ConfigManager implements ConfigManagerMBean {
         }
     }
     
-    private void retransformClasses() {
+    /**
+     * Perform incremental retransformation by comparing old and new checksums.
+     * Only classes affected by configuration changes are retransformed.
+     *
+     * @param oldChecksums checksum snapshot before configuration reload
+     */
+    private void retransformClassesIncremental(Map<String, String> oldChecksums) {
         Instrumentation inst = InstrumentationAccessor.getInstrumentation();
         if (inst == null) {
             Logger.warn("Instrumentation instance not available - cannot retransform classes. " +
@@ -199,63 +213,96 @@ public class ConfigManager implements ConfigManagerMBean {
             return;
         }
 
-        Logger.info("Retransforming classes based on new configuration...");
+        // Compute diff between old and new configurations
+        Map<String, String> newChecksums = DynamicInstrumentationConfig.getAllChecksums();
+        InstrumentationDiff diff = InstrumentationDiff.compute(oldChecksums, newChecksums);
+
+        Logger.info("Instrumentation diff: added/changed=" + diff.getAddedOrChanged().size() +
+                ", removed=" + diff.getRemoved().size() +
+                ", unchanged=" + diff.getUnchanged().size());
+
+        // If no changes, skip retransformation entirely
+        if (!diff.hasChanges()) {
+            Logger.info("No configuration changes detected - skipping retransformation");
+            return;
+        }
+
+        // Get all affected class#method entries
+        Set<String> affected = diff.getAffected();
+        Logger.info("Retransforming classes affected by " + affected.size() + " configuration changes...");
+
         try {
             Class<?>[] loadedClasses = inst.getAllLoadedClasses();
             Set<Class<?>> classesToRetransform = new HashSet<>();
-            
+
+            // Build a set of affected class names (without method)
+            Set<String> affectedClassNames = new HashSet<>();
+            for (String classMethod : affected) {
+                int hashIndex = classMethod.indexOf('#');
+                if (hashIndex > 0) {
+                    affectedClassNames.add(classMethod.substring(0, hashIndex));
+                }
+            }
+
             for (Class<?> clazz : loadedClasses) {
                 if (!inst.isModifiableClass(clazz)) {
                     continue;
                 }
-                
-                boolean shouldInstrument = configManager.isClassInstrumented(clazz.getName());
-                
-                // If not matched by name, check hierarchy (interfaces and superclasses)
-                if (!shouldInstrument) {
-                    // Check direct interfaces
-                    for (Class<?> iface : clazz.getInterfaces()) {
-                        if (configManager.isClassInstrumented(iface.getName())) {
-                            shouldInstrument = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (!shouldInstrument) {
-                    // Check superclass chain and their interfaces
-                    Class<?> current = clazz.getSuperclass();
-                    while (current != null && current != Object.class) {
-                        if (configManager.isClassInstrumented(current.getName())) {
-                            shouldInstrument = true;
-                            break;
-                        }
-                        for (Class<?> iface : current.getInterfaces()) {
-                            if (configManager.isClassInstrumented(iface.getName())) {
-                                shouldInstrument = true;
-                                break;
-                            }
-                        }
-                        if (shouldInstrument) break;
-                        current = current.getSuperclass();
-                    }
+
+                String className = clazz.getName();
+
+                // Check if this class is directly affected
+                if (affectedClassNames.contains(className)) {
+                    classesToRetransform.add(clazz);
+                    continue;
                 }
 
-                if (shouldInstrument) {
+                // Check if class implements an affected interface or extends an affected class
+                boolean isAffected = isClassAffectedByDiff(clazz, affectedClassNames);
+
+                if (isAffected) {
                     classesToRetransform.add(clazz);
                 }
             }
-            
+
             if (!classesToRetransform.isEmpty()) {
-                Logger.info("Retransforming " + classesToRetransform.size() + " classes...");
+                Logger.info("Retransforming " + classesToRetransform.size() + " classes (incremental)...");
                 inst.retransformClasses(classesToRetransform.toArray(new Class<?>[0]));
-                Logger.info("Retransformation complete");
+                Logger.info("Incremental retransformation complete");
             } else {
-                Logger.info("No matching loaded classes found to retransform");
+                Logger.info("No matching loaded classes found for affected configurations");
             }
         } catch (Exception e) {
-            Logger.error("Failed to retransform classes", e);
+            Logger.error("Failed to retransform classes incrementally", e);
         }
+    }
+
+    /**
+     * Check if a class is affected by the diff through its hierarchy (interfaces/superclasses).
+     */
+    private boolean isClassAffectedByDiff(Class<?> clazz, Set<String> affectedClassNames) {
+        // Check direct interfaces
+        for (Class<?> iface : clazz.getInterfaces()) {
+            if (affectedClassNames.contains(iface.getName())) {
+                return true;
+            }
+        }
+
+        // Check superclass chain and their interfaces
+        Class<?> current = clazz.getSuperclass();
+        while (current != null && current != Object.class) {
+            if (affectedClassNames.contains(current.getName())) {
+                return true;
+            }
+            for (Class<?> iface : current.getInterfaces()) {
+                if (affectedClassNames.contains(iface.getName())) {
+                    return true;
+                }
+            }
+            current = current.getSuperclass();
+        }
+
+        return false;
     }
 
     @Override

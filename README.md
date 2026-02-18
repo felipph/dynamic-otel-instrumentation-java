@@ -40,6 +40,7 @@ This project builds a JAR that plugs into the official **OpenTelemetry Java Agen
 | **Return Value Capture** | Extract attributes from method return values |
 | **ClassLoader Safe** | Runs as an OTel Agent extension — classloader isolation handled automatically |
 | **JMX Management** | Runtime control via JMX MBeans |
+| **Incremental Hot Reload** | Only retransform classes affected by config changes — fast even with 4k+ classes |
 
 ### How It Works (High Level)
 
@@ -621,11 +622,32 @@ The extension registers a JMX MBean at `com.otel.dynamic:type=ConfigManager`.
 
 When you call `reloadConfiguration()`, the extension:
 
-1. **Reloads** the JSON configuration from disk
-2. **Updates** the internal registry with new instrumentation rules
-3. **Retransforms** all loaded classes that match the new configuration (including via interface hierarchy)
+1. **Snapshots** current instrumentation checksums
+2. **Reloads** the JSON configuration from disk
+3. **Updates** the internal registry with new instrumentation rules
+4. **Computes diff** between old and new configurations
+5. **Retransforms only affected classes** (new, changed, or removed rules)
 
 This allows you to add, remove, or modify instrumentation rules at runtime without restarting the application.
+
+#### Incremental Retransformation
+
+The extension uses **checksum-based incremental retransformation** to minimize the performance impact of hot reloads in large applications:
+
+| Scenario | Classes Retransformed |
+|----------|----------------------|
+| Add 1 new method rule | ~1 class |
+| Change 1 attribute | ~1 class |
+| Reload unchanged config | 0 classes |
+| Remove a rule | affected classes only |
+
+**How it works:**
+- Each instrumentation rule (class#method) is assigned an MD5 checksum based on its attributes
+- Before reload, current checksums are snapshotted
+- After reload, the diff is computed to identify added, changed, removed, and unchanged entries
+- Only classes with affected rules are retransformed
+
+This optimization makes hot reload practical even in applications with thousands of instrumented classes.
 
 ### Access via JConsole
 
