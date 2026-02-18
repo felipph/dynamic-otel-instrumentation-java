@@ -1,16 +1,13 @@
 # This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-maven
 
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
 name: Java CI with Maven
 
 on:
   push:
     branches: [ "main" ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ "main" ]
 
@@ -29,3 +26,25 @@ jobs:
         cache: maven
     - name: Build with Maven
       run: mvn -B package --file pom.xml
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dynamic-instrumentation-agent
+        path: target/dynamic-instrumentation-agent-*.jar
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: dynamic-instrumentation-agent
+        path: ./artifacts
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ./artifacts/dynamic-instrumentation-agent-*.jar
+        generate_release_notes: true
