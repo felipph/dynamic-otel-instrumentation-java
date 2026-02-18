@@ -64,7 +64,7 @@ cd /path/to/java-otel-instrumentation
 mvn clean package -DskipTests
 ```
 
-This creates `target/dynamic-instrumentation-agent-1.0.0.jar`.
+This creates `target/dynamic-instrumentation-agent-1.1.0.jar`.
 
 ### Step 2: Start Jaeger
 
@@ -490,7 +490,7 @@ jcmd <pid> JMX.invoke com.otel.dynamic:type=ConfigManager reloadConfiguration
 
 3. Check extension JAR exists:
    ```bash
-   ls -la target/dynamic-instrumentation-agent-1.0.0.jar
+   ls -la target/dynamic-instrumentation-agent-1.1.0.jar
    ```
 
 ### No Traces in Jaeger

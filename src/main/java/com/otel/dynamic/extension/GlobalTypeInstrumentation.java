@@ -34,6 +34,10 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                 // 1. Check explicit class configuration (from "instrumentations" section)
                 // These don't require annotation filtering
                 if (ConfigurationManager.getInstance().hasExplicitClassConfig(className)) {
+                    // Check concreteOnly for explicit class config
+                    if (shouldSkipAbstractClass(target, className)) {
+                        return false;
+                    }
                     return true;
                 }
 
@@ -61,7 +65,12 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                     while (current != null && !current.represents(Object.class)) {
                         // Check interfaces of this class
                         for (TypeDescription.Generic iface : current.getInterfaces()) {
-                            if (ConfigurationManager.getInstance().hasExplicitClassConfig(iface.asErasure().getName())) {
+                            String interfaceName = iface.asErasure().getName();
+                            if (ConfigurationManager.getInstance().hasExplicitClassConfig(interfaceName)) {
+                                // Check concreteOnly for interface-based config
+                                if (shouldSkipAbstractClassForInterface(target, interfaceName)) {
+                                    return false;
+                                }
                                 return true;
                             }
                         }
@@ -75,6 +84,41 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                 }
 
                 return false;
+            }
+
+            /**
+             * Check if this abstract class should be skipped based on concreteOnly configuration.
+             * This checks if any method in the configuration for this class has concreteOnly=true.
+             */
+            private boolean shouldSkipAbstractClass(TypeDescription target, String configuredClassName) {
+                // If the class is not abstract, never skip
+                if (!target.isAbstract()) {
+                    return false;
+                }
+
+                // Check if concreteOnly is enabled for this class (any method)
+                // We need to check all configured methods for this class
+                return ConfigurationManager.getInstance().isConcreteOnlyForHierarchy(target.getName(), "*");
+            }
+
+            /**
+             * Check if this abstract class should be skipped when matched via an interface.
+             * This checks if the interface configuration has concreteOnly=true.
+             */
+            private boolean shouldSkipAbstractClassForInterface(TypeDescription target, String interfaceName) {
+                // If the class is not abstract, never skip
+                if (!target.isAbstract()) {
+                    return false;
+                }
+
+                // Check if concreteOnly is enabled globally
+                if (ConfigurationManager.getInstance().isConcreteOnly(interfaceName, "*")) {
+                    return true;
+                }
+
+                // Also check if global concreteOnly is set
+                return ConfigurationManager.getInstance().getCurrentConfig().getConfig().getConcreteOnly() != null
+                        && ConfigurationManager.getInstance().getCurrentConfig().getConfig().getConcreteOnly();
             }
 
             private boolean hasAnnotation(TypeDescription target, String annotationName) {
@@ -114,6 +158,10 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
 
                     // 1. Check explicit method configuration (no annotation filtering)
                     if (ConfigurationManager.getInstance().isMethodInstrumented(declaringClassName, methodName)) {
+                        // Check concreteOnly for explicit method config
+                        if (shouldSkipAbstractMethod(declaringType, methodName)) {
+                            return false;
+                        }
                         return true;
                     }
 
@@ -142,8 +190,12 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                         while (current != null && !current.represents(Object.class)) {
                             // Check interfaces
                             for (TypeDescription.Generic iface : current.getInterfaces()) {
-                                if (ConfigurationManager.getInstance().isMethodInstrumented(
-                                        iface.asErasure().getName(), methodName)) {
+                                String interfaceName = iface.asErasure().getName();
+                                if (ConfigurationManager.getInstance().isMethodInstrumented(interfaceName, methodName)) {
+                                    // Check concreteOnly for interface-based config
+                                    if (shouldSkipAbstractMethodForInterface(declaringType, interfaceName, methodName)) {
+                                        return false;
+                                    }
                                     return true;
                                 }
                             }
@@ -157,6 +209,38 @@ public class GlobalTypeInstrumentation implements TypeInstrumentation {
                     }
 
                     return false;
+                }
+
+                /**
+                 * Check if this abstract class method should be skipped based on concreteOnly.
+                 */
+                private boolean shouldSkipAbstractMethod(TypeDescription declaringType, String methodName) {
+                    // If the class is not abstract, never skip
+                    if (!declaringType.isAbstract()) {
+                        return false;
+                    }
+
+                    // Check if concreteOnly is enabled for this method
+                    return ConfigurationManager.getInstance().isConcreteOnly(declaringType.getName(), methodName);
+                }
+
+                /**
+                 * Check if this abstract class method should be skipped when matched via an interface.
+                 */
+                private boolean shouldSkipAbstractMethodForInterface(TypeDescription declaringType, String interfaceName, String methodName) {
+                    // If the class is not abstract, never skip
+                    if (!declaringType.isAbstract()) {
+                        return false;
+                    }
+
+                    // Check if concreteOnly is enabled for this interface+method
+                    if (ConfigurationManager.getInstance().isConcreteOnly(interfaceName, methodName)) {
+                        return true;
+                    }
+
+                    // Also check if global concreteOnly is set
+                    return ConfigurationManager.getInstance().getCurrentConfig().getConfig().getConcreteOnly() != null
+                            && ConfigurationManager.getInstance().getCurrentConfig().getConfig().getConcreteOnly();
                 }
 
                 private boolean hasAnnotation(TypeDescription target, String annotationName) {

@@ -110,7 +110,7 @@ services:
       # OpenTelemetry Java Agent
       - ./opentelemetry-javaagent.jar:/opt/jboss/agents/opentelemetry-javaagent.jar:ro
       # Dynamic Instrumentation Extension
-      - ../target/dynamic-instrumentation-agent-1.0.0.jar:/opt/jboss/agents/dynamic-instrumentation-extension.jar:ro
+      - ../target/dynamic-instrumentation-agent-1.1.0.jar:/opt/jboss/agents/dynamic-instrumentation-extension.jar:ro
 
       # Configuração de Instrumentação
       - ./configs/instrumentation.json:/opt/otel/config/instrumentation.json:ro

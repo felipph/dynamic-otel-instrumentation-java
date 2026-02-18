@@ -13,7 +13,7 @@ echo "=========================================="
 echo ""
 
 # Build extension if needed
-if [ ! -f "$ROOT_DIR/target/dynamic-instrumentation-agent-1.0.0.jar" ]; then
+if [ ! -f "$ROOT_DIR/target/dynamic-instrumentation-agent-1.1.0.jar" ]; then
     echo "Building extension..."
     cd "$ROOT_DIR"
     mvn clean package -DskipTests -q

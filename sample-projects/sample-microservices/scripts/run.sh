@@ -16,7 +16,7 @@ echo "Service Name: order-service-local"
 echo ""
 
 # Check if JAR exists
-if [ ! -f "$ROOT_DIR/target/dynamic-instrumentation-agent-1.0.0.jar" ]; then
+if [ ! -f "$ROOT_DIR/target/dynamic-instrumentation-agent-1.1.0.jar" ]; then
     echo "Building extension..."
     cd "$ROOT_DIR"
     mvn clean package -DskipTests -q
@@ -48,8 +48,8 @@ fi
 # Run with OTel agent and extension
 java \
     -javaagent:"$OTEL_AGENT" \
-    -javaagent:"$ROOT_DIR/target/dynamic-instrumentation-agent-1.0.0.jar" \
-    -Dotel.javaagent.extensions="$ROOT_DIR/target/dynamic-instrumentation-agent-1.0.0.jar" \
+    -javaagent:"$ROOT_DIR/target/dynamic-instrumentation-agent-1.1.0.jar" \
+    -Dotel.javaagent.extensions="$ROOT_DIR/target/dynamic-instrumentation-agent-1.1.0.jar" \
     -Dotel.service.name=order-service-local \
     -Dotel.exporter.otlp.endpoint=http://localhost:4317 \
     -Dotel.exporter.otlp.protocol=grpc \

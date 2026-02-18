@@ -296,7 +296,7 @@ public class ConfigurationManager {
                         String remainder = className.substring(pkg.getPackageName().length() + 1);
                         match = !remainder.contains(".");
                     }
-                    
+
                     // For package instrumentation, we usually want to exclude some methods (like constructors, synthetic)
                     // But the matcher caller (ByteBuddy) will ask "is this method instrumented?"
                     // The actual exclusion logic (no constructors, etc) is usually in the matcher construction.
@@ -306,6 +306,87 @@ public class ConfigurationManager {
                 }
             }
         }
+        return false;
+    }
+
+    /**
+     * Check if concreteOnly is enabled for a specific class and method.
+     * Precedence: method-level > global > false (default)
+     *
+     * This is used to determine if abstract classes should be skipped
+     * when instrumenting via interface-based configuration.
+     *
+     * @param className the class name (can be an interface or concrete class)
+     * @param methodName the method name
+     * @return true if only concrete classes should be instrumented
+     */
+    public boolean isConcreteOnly(String className, String methodName) {
+        ConfigSnapshot snapshot = currentConfig.get();
+        if (snapshot == null) return false;
+
+        // 1. Check method-level configuration first
+        MethodConfig methodConfig = snapshot.getConfigFor(className, methodName);
+        if (methodConfig != null && methodConfig.getConcreteOnly() != null) {
+            return methodConfig.getConcreteOnly();
+        }
+
+        // 2. Check global configuration
+        if (snapshot.getConfig().getConcreteOnly() != null) {
+            return snapshot.getConfig().getConcreteOnly();
+        }
+
+        // 3. Default: false
+        return false;
+    }
+
+    /**
+     * Check if concreteOnly is enabled for any method in the hierarchy.
+     * This walks the class hierarchy to find if any interface or superclass
+     * has concreteOnly enabled.
+     *
+     * @param className the runtime class name
+     * @param methodName the method name
+     * @return true if concreteOnly is enabled anywhere in the hierarchy
+     */
+    public boolean isConcreteOnlyForHierarchy(String className, String methodName) {
+        ConfigSnapshot snapshot = currentConfig.get();
+        if (snapshot == null) return false;
+
+        // Check exact class first
+        if (isConcreteOnly(className, methodName)) {
+            return true;
+        }
+
+        // Walk the hierarchy to check interfaces and superclasses
+        try {
+            Class<?> clazz = Class.forName(className, false,
+                    Thread.currentThread().getContextClassLoader());
+
+            // Check all interfaces
+            for (Class<?> iface : clazz.getInterfaces()) {
+                if (isConcreteOnly(iface.getName(), methodName)) {
+                    return true;
+                }
+            }
+
+            // Walk superclass chain
+            Class<?> superClass = clazz.getSuperclass();
+            while (superClass != null && superClass != Object.class) {
+                if (isConcreteOnly(superClass.getName(), methodName)) {
+                    return true;
+                }
+                // Also check interfaces of superclass
+                for (Class<?> iface : superClass.getInterfaces()) {
+                    if (isConcreteOnly(iface.getName(), methodName)) {
+                        return true;
+                    }
+                }
+                superClass = superClass.getSuperclass();
+            }
+        } catch (ClassNotFoundException ignored) {
+            // If class not found, fall through
+        }
+
         return false;
     }
 

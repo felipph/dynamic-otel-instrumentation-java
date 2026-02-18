@@ -17,6 +17,13 @@ public class InstrumentationConfig {
     private List<PackageConfig> packages;
 
     /**
+     * Global setting for concrete-only instrumentation.
+     * When true, only concrete (non-abstract) classes will be instrumented
+     * for interface-based configurations. Can be overridden at the method level.
+     */
+    private Boolean concreteOnly;
+
+    /**
      * Default constructor for JSON deserialization
      */
     public InstrumentationConfig() {
@@ -58,6 +65,14 @@ public class InstrumentationConfig {
 
     public void setPackages(List<PackageConfig> packages) {
         this.packages = packages != null ? packages : new ArrayList<>();
+    }
+
+    public Boolean getConcreteOnly() {
+        return concreteOnly;
+    }
+
+    public void setConcreteOnly(Boolean concreteOnly) {
+        this.concreteOnly = concreteOnly;
     }
 
     /**

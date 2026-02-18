@@ -218,7 +218,7 @@ mvn clean package -DskipTests
 bash scripts/build.sh
 ```
 
-Output: `target/dynamic-instrumentation-agent-1.0.0.jar`
+Output: `target/dynamic-instrumentation-agent-1.1.0.jar`
 
 ### Run Tests
 
