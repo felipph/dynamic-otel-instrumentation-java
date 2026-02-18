@@ -1,7 +1,12 @@
 package com.otel.dynamic.agent;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Static registry that holds attribute extraction rules for instrumented methods.
@@ -23,6 +28,7 @@ public class DynamicInstrumentationConfig {
 
     private static final String PROP_PREFIX = "otel.dynamic.rules.";
     private static final String RETURN_PROP_PREFIX = "otel.dynamic.return.";
+    private static final String CHECKSUM_PREFIX = "otel.dynamic.checksum.";
 
     /**
      * Simple POJO representing a single attribute extraction rule.
@@ -77,6 +83,7 @@ public class DynamicInstrumentationConfig {
     /**
      * Register attribute extraction rules for a specific class+method pair.
      * Serializes the rules into a system property for cross-classloader access.
+     * Also stores a checksum for change detection during hot-reload.
      *
      * @param className  fully qualified class name (dot-separated)
      * @param methodName method name
@@ -97,6 +104,8 @@ public class DynamicInstrumentationConfig {
                   .append(r.getAttributeName());
             }
             System.setProperty(PROP_PREFIX + className + "#" + methodName, sb.toString());
+            // Store checksum for change detection
+            storeChecksum(className, methodName, computeChecksum(rules));
         }
     }
 
@@ -130,6 +139,7 @@ public class DynamicInstrumentationConfig {
     /**
      * Register return value attribute extraction rules for a specific class+method pair.
      * Serializes the rules into a system property for cross-classloader access.
+     * Also stores a checksum for change detection during hot-reload.
      *
      * Serialization format:
      *   Key:   "otel.dynamic.return.{className}#{methodName}"
@@ -152,6 +162,11 @@ public class DynamicInstrumentationConfig {
                   .append(r.getAttributeName());
             }
             System.setProperty(RETURN_PROP_PREFIX + className + "#" + methodName, sb.toString());
+            // Combine checksums for both regular and return rules
+            String existingChecksum = getChecksum(className, methodName);
+            String returnChecksum = computeReturnChecksum(rules);
+            String combinedChecksum = existingChecksum.isEmpty() ? returnChecksum : existingChecksum + ":" + returnChecksum;
+            storeChecksum(className, methodName, combinedChecksum);
         }
     }
 
@@ -335,12 +350,105 @@ public class DynamicInstrumentationConfig {
     public static void clear() {
         List<String> toRemove = new ArrayList<>();
         for (String key : System.getProperties().stringPropertyNames()) {
-            if (key.startsWith(PROP_PREFIX) || key.startsWith(RETURN_PROP_PREFIX)) {
+            if (key.startsWith(PROP_PREFIX) || key.startsWith(RETURN_PROP_PREFIX) || key.startsWith(CHECKSUM_PREFIX)) {
                 toRemove.add(key);
             }
         }
         for (String key : toRemove) {
             System.clearProperty(key);
         }
+    }
+
+    /**
+     * Compute an MD5 checksum for a list of attribute rules.
+     * Used to detect changes during configuration reload.
+     *
+     * @param rules list of attribute rules
+     * @return hex string of MD5 checksum, or empty string if rules is null/empty
+     */
+    public static String computeChecksum(List<AttributeRule> rules) {
+        if (rules == null || rules.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (AttributeRule r : rules) {
+            sb.append(r.getArgIndex())
+              .append('|')
+              .append(r.getMethodCall() != null ? r.getMethodCall() : "")
+              .append('|')
+              .append(r.getAttributeName())
+              .append(';');
+        }
+        return md5(sb.toString());
+    }
+
+    /**
+     * Compute an MD5 checksum for a list of return value rules.
+     * Used to detect changes during configuration reload.
+     *
+     * @param rules list of return value rules
+     * @return hex string of MD5 checksum, or empty string if rules is null/empty
+     */
+    public static String computeReturnChecksum(List<ReturnValueRule> rules) {
+        if (rules == null || rules.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (ReturnValueRule r : rules) {
+            sb.append(r.getMethodCall() != null ? r.getMethodCall() : "")
+              .append('|')
+              .append(r.getAttributeName())
+              .append(';');
+        }
+        return md5(sb.toString());
+    }
+
+    /**
+     * Compute MD5 hash of a string.
+     */
+    private static String md5(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            // MD5 is always available in Java
+            return Integer.toHexString(input.hashCode());
+        }
+    }
+
+    /**
+     * Store checksum for a class#method pair.
+     */
+    private static void storeChecksum(String className, String methodName, String checksum) {
+        System.setProperty(CHECKSUM_PREFIX + className + "#" + methodName, checksum);
+    }
+
+    /**
+     * Get checksum for a class#method pair.
+     */
+    public static String getChecksum(String className, String methodName) {
+        return System.getProperty(CHECKSUM_PREFIX + className + "#" + methodName, "");
+    }
+
+    /**
+     * Snapshot all current checksums for change detection.
+     * Returns a map of "className#methodName" -> checksum.
+     *
+     * @return map of all current checksums
+     */
+    public static Map<String, String> getAllChecksums() {
+        Map<String, String> checksums = new HashMap<>();
+        for (String key : System.getProperties().stringPropertyNames()) {
+            if (key.startsWith(CHECKSUM_PREFIX)) {
+                String classMethod = key.substring(CHECKSUM_PREFIX.length());
+                checksums.put(classMethod, System.getProperty(key, ""));
+            }
+        }
+        return checksums;
     }
 }
