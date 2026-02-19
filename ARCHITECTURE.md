@@ -33,7 +33,7 @@ Detailed diagrams showing how the Dynamic OpenTelemetry Instrumentation Extensio
 │  │                                                                       │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
 │  │  │          Dynamic Instrumentation Extension                      │  │  │
-│  │  │          (dynamic-instrumentation-agent-1.0.0.jar)              │  │  │
+│  │  │          (dynamic-instrumentation-agent-1.1.0.jar)              │  │  │
 │  │  │                                                                 │  │  │
 │  │  │  ConfigDrivenInstrumentationModule ◄── SPI Discovery            │  │  │
 │  │  │       │                                                         │  │  │
@@ -890,7 +890,7 @@ Checksum format:
 │  │  Volumes:                                                        │   │
 │  │  ├── opentelemetry-javaagent.jar                                 │   │
 │  │  │     → /opt/jboss/agents/opentelemetry-javaagent.jar           │   │
-│  │  ├── dynamic-instrumentation-agent-1.0.0.jar                     │   │
+│  │  ├── dynamic-instrumentation-agent-1.1.0.jar                     │   │
 │  │  │     → /opt/jboss/agents/dynamic-instrumentation-extension.jar │   │
 │  │  ├── instrumentation.json                                        │   │
 │  │  │     → /opt/otel/config/instrumentation.json                   │   │

@@ -9,6 +9,9 @@ A **configuration-driven** extension for the [OpenTelemetry Java Agent](https://
 1. [Overview](#overview)
 2. [Quick Start](#quick-start)
 3. [Configuration Reference](#configuration-reference)
+   - [packages](#packages--package-level-instrumentation)
+   - [instrumentations](#instrumentations--method-level-instrumentation)
+   - [concreteOnly](#concreteonly--skip-abstract-classes)
 4. [Instrumentation Modes](#instrumentation-modes)
 5. [Advanced Attribute Extraction](#advanced-attribute-extraction)
 6. [Span Attributes](#span-attributes)
@@ -34,6 +37,7 @@ This project builds a JAR that plugs into the official **OpenTelemetry Java Agen
 | **Method-Level Instrumentation** | Target specific classes and methods with custom attribute extraction |
 | **Package-Level Instrumentation** | Instrument all classes in a package, optionally filtered by annotations |
 | **Interface-Aware** | Configure an interface — all implementations are instrumented automatically |
+| **Concrete-Only Mode** | Skip abstract classes when instrumenting interfaces — only instrument leaf implementations |
 | **Interface Detection** | Spans carry a `code.instrumented.interface` attribute when the match came from an interface |
 | **Custom Attribute Extraction** | Extract method arguments into span attributes via reflection |
 | **Chained Method Calls** | Navigate object graphs with `getCustomer.getAddress.getCity` syntax |
@@ -81,7 +85,7 @@ bash scripts/build.sh
 mvn clean package -DskipTests
 ```
 
-This produces `target/dynamic-instrumentation-agent-1.0.0.jar`.
+This produces `target/dynamic-instrumentation-agent-1.1.0.jar`.
 
 ### 2. Create Your Configuration
 
@@ -121,8 +125,8 @@ To enable **hot reload** (runtime configuration updates without restart), the ex
 ```bash
 java \
   -javaagent:/path/to/opentelemetry-javaagent.jar \
-  -javaagent:/path/to/dynamic-instrumentation-agent-1.0.0.jar \
-  -Dotel.javaagent.extensions=/path/to/dynamic-instrumentation-agent-1.0.0.jar \
+  -javaagent:/path/to/dynamic-instrumentation-agent-1.1.0.jar \
+  -Dotel.javaagent.extensions=/path/to/dynamic-instrumentation-agent-1.1.0.jar \
   -Dinstrumentation.config.path=/path/to/instrumentation.json \
   -Dotel.service.name=my-application \
   -Dotel.exporter.otlp.endpoint=http://localhost:4317 \
@@ -306,6 +310,81 @@ Each entry targets a **specific class and method** with optional custom attribut
   ]
 }
 ```
+
+### `concreteOnly` — Skip Abstract Classes
+
+When instrumenting via interfaces, you may have intermediate abstract classes that shouldn't be instrumented. The `concreteOnly` option lets you skip abstract classes and only instrument concrete (non-abstract) implementations.
+
+**Hierarchy Example:**
+```
+IOrderService (interface)
+    ↑
+AbstractOrderService (abstract class) ← skipped with concreteOnly=true
+    ↑
+OrderServiceImpl (concrete class) ← instrumented
+```
+
+| Level | Field | Type | Default | Description |
+|-------|-------|------|---------|-------------|
+| **Global** | `concreteOnly` | Boolean | `false` | Apply to all instrumentations |
+| **Method-level** | `concreteOnly` | Boolean | (uses global) | Override global setting for specific method |
+
+**Precedence:** Method-level > Global > `false` (default)
+
+#### Global Configuration
+
+Apply `concreteOnly` to all interface-based instrumentations:
+
+```json
+{
+  "concreteOnly": true,
+  "instrumentations": [
+    {
+      "className": "com.myapp.service.IOrderService",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.customer_id" }
+      ]
+    }
+  ]
+}
+```
+
+#### Method-Level Override
+
+Override the global setting for specific methods:
+
+```json
+{
+  "concreteOnly": true,
+  "instrumentations": [
+    {
+      "className": "com.myapp.service.IOrderService",
+      "methodName": "createOrder",
+      "concreteOnly": false,
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.customer_id" }
+      ]
+    },
+    {
+      "className": "com.myapp.service.ICustomerService",
+      "methodName": "getCustomer"
+    }
+  ]
+}
+```
+
+In this example:
+- `IOrderService.createOrder` → `concreteOnly: false` (overrides global) → instruments abstract classes too
+- `ICustomerService.getCustomer` → uses global `concreteOnly: true` → skips abstract classes
+
+#### When to Use
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Interface → Abstract → Concrete | Use `concreteOnly: true` to skip the abstract layer |
+| Interface → Multiple Concrete | `concreteOnly: false` (default) works fine |
+| Mix of both | Set global + override per method as needed |
 
 ---
 
@@ -545,7 +624,7 @@ jboss:
     OTEL_EXPORTER_OTLP_PROTOCOL: grpc
   volumes:
     - ./opentelemetry-javaagent.jar:/opt/jboss/agents/opentelemetry-javaagent.jar:ro
-    - ../target/dynamic-instrumentation-agent-1.0.0.jar:/opt/jboss/agents/dynamic-instrumentation-extension.jar:ro
+    - ../target/dynamic-instrumentation-agent-1.1.0.jar:/opt/jboss/agents/dynamic-instrumentation-extension.jar:ro
     - ./configs/instrumentation.json:/opt/otel/config/instrumentation.json:ro
     - ./configs/standalone.conf:/opt/jboss/wildfly/bin/standalone.conf:ro
 ```
@@ -898,4 +977,4 @@ For detailed instructions, see [USING-SAMPLE-PROJECTS.md](USING-SAMPLE-PROJECTS.
 
 ---
 
-**Version:** 1.0.0 | **Java:** 8+ | **OTel Agent:** 2.25.0+
+**Version:** 1.1.0 | **Java:** 8+ | **OTel Agent:** 2.25.0+

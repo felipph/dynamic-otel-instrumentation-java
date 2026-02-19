@@ -57,7 +57,7 @@ services:
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - JAVA_OPTS=-javaagent:/opt/otel/opentelemetry-javaagent.jar -Dotel.javaagent.extensions=/opt/otel/dynamic-instrumentation-agent.jar -Dinstrumentation.config.path=/opt/config/instrumentation.json
     volumes:
-      - ../../target/dynamic-instrumentation-agent-1.0.0.jar:/opt/otel/dynamic-instrumentation-agent.jar:ro
+      - ../../target/dynamic-instrumentation-agent-1.1.0.jar:/opt/otel/dynamic-instrumentation-agent.jar:ro
       - ./config/instrumentation.json:/opt/config/instrumentation.json:ro
     depends_on:
       rabbitmq:
@@ -82,7 +82,7 @@ services:
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - JAVA_OPTS=-javaagent:/opt/otel/opentelemetry-javaagent.jar -Dotel.javaagent.extensions=/opt/otel/dynamic-instrumentation-agent.jar -Dinstrumentation.config.path=/opt/config/instrumentation.json
     volumes:
-      - ../../target/dynamic-instrumentation-agent-1.0.0.jar:/opt/otel/dynamic-instrumentation-agent.jar:ro
+      - ../../target/dynamic-instrumentation-agent-1.1.0.jar:/opt/otel/dynamic-instrumentation-agent.jar:ro
       - ./config/instrumentation.json:/opt/config/instrumentation.json:ro
     depends_on:
       rabbitmq:

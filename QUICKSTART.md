@@ -142,7 +142,7 @@ java-otel-instrumentation/
 │   ├── stop-stack.sh           # Parar tudo
 │   └── reload.sh
 ├── target/
-│   └── dynamic-instrumentation-agent-1.0.0.jar
+│   └── dynamic-instrumentation-agent-1.1.0.jar
 ├── README.md
 ├── QUICKSTART.md
 ├── ARCHITECTURE.md

@@ -76,7 +76,7 @@ echo ""
 ERRORS=0
 
 # Verificar build do agente
-if ! check_build "java-otel-instrumentation" "$INSTRUMENTATION_DIR/target/dynamic-instrumentation-agent-1.0.0.jar"; then
+if ! check_build "java-otel-instrumentation" "$INSTRUMENTATION_DIR/target/dynamic-instrumentation-agent-1.1.0.jar"; then
     ERRORS=$((ERRORS + 1))
 fi
 

@@ -210,4 +210,113 @@ public class ConfigurationManagerTest {
         // Listener should not be called
         assertFalse(changed[0]);
     }
+
+    @Test
+    public void testConcreteOnlyGlobal() throws IOException {
+        // Write config with global concreteOnly
+        String json = "{\n" +
+                "  \"concreteOnly\": true,\n" +
+                "  \"instrumentations\": [\n" +
+                "    {\n" +
+                "      \"className\": \"com.example.IService\",\n" +
+                "      \"methodName\": \"process\"\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        try (FileWriter writer = new FileWriter(tempConfigFile)) {
+            writer.write(json);
+        }
+
+        manager = ConfigurationManager.initialize(tempConfigFile.getAbsolutePath());
+
+        // Verify global concreteOnly is set
+        assertTrue(manager.getConfig().getConcreteOnly());
+
+        // Verify isConcreteOnly returns true for the configured method
+        assertTrue(manager.isConcreteOnly("com.example.IService", "process"));
+    }
+
+    @Test
+    public void testConcreteOnlyMethodLevel() throws IOException {
+        // Write config with method-level concreteOnly
+        String json = "{\n" +
+                "  \"concreteOnly\": false,\n" +
+                "  \"instrumentations\": [\n" +
+                "    {\n" +
+                "      \"className\": \"com.example.IService\",\n" +
+                "      \"methodName\": \"process\",\n" +
+                "      \"concreteOnly\": true\n" +
+                "    },\n" +
+                "    {\n" +
+                "      \"className\": \"com.example.IOtherService\",\n" +
+                "      \"methodName\": \"execute\",\n" +
+                "      \"concreteOnly\": false\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        try (FileWriter writer = new FileWriter(tempConfigFile)) {
+            writer.write(json);
+        }
+
+        manager = ConfigurationManager.initialize(tempConfigFile.getAbsolutePath());
+
+        // Method-level concreteOnly should override global
+        assertTrue(manager.isConcreteOnly("com.example.IService", "process"));
+        assertFalse(manager.isConcreteOnly("com.example.IOtherService", "execute"));
+    }
+
+    @Test
+    public void testConcreteOnlyDefault() throws IOException {
+        // Write config without concreteOnly
+        String json = "{\n" +
+                "  \"instrumentations\": [\n" +
+                "    {\n" +
+                "      \"className\": \"com.example.IService\",\n" +
+                "      \"methodName\": \"process\"\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        try (FileWriter writer = new FileWriter(tempConfigFile)) {
+            writer.write(json);
+        }
+
+        manager = ConfigurationManager.initialize(tempConfigFile.getAbsolutePath());
+
+        // Default should be false
+        assertFalse(manager.isConcreteOnly("com.example.IService", "process"));
+    }
+
+    @Test
+    public void testConcreteOnlyPrecedence() throws IOException {
+        // Write config with both global and method-level concreteOnly
+        String json = "{\n" +
+                "  \"concreteOnly\": true,\n" +
+                "  \"instrumentations\": [\n" +
+                "    {\n" +
+                "      \"className\": \"com.example.IService\",\n" +
+                "      \"methodName\": \"process\",\n" +
+                "      \"concreteOnly\": false\n" +
+                "    },\n" +
+                "    {\n" +
+                "      \"className\": \"com.example.IOtherService\",\n" +
+                "      \"methodName\": \"execute\"\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        try (FileWriter writer = new FileWriter(tempConfigFile)) {
+            writer.write(json);
+        }
+
+        manager = ConfigurationManager.initialize(tempConfigFile.getAbsolutePath());
+
+        // Method-level concreteOnly=false should override global=true
+        assertFalse(manager.isConcreteOnly("com.example.IService", "process"));
+
+        // No method-level setting, should use global=true
+        assertTrue(manager.isConcreteOnly("com.example.IOtherService", "execute"));
+    }
 }

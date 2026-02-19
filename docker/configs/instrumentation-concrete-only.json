@@ -1,0 +1,33 @@
+{
+  "_comment": "Example configuration demonstrating the concreteOnly feature",
+
+  "concreteOnly": true,
+
+  "instrumentations": [
+    {
+      "_comment": "Interface-based instrumentation - only concrete implementations will be instrumented",
+      "className": "com.sample.app.ejb.service.IOrderService",
+      "methodName": "createOrder",
+      "attributes": [
+        { "argIndex": 0, "methodCall": "getCustomerId", "attributeName": "app.service.customer_id" },
+        { "argIndex": 0, "methodCall": "getPaymentMethod", "attributeName": "app.service.payment_method" }
+      ]
+    },
+    {
+      "className": "com.sample.app.ejb.service.IOrderService",
+      "methodName": "processOrder",
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.order_id" }
+      ]
+    },
+    {
+      "_comment": "This method overrides global concreteOnly to false - will instrument abstract classes too",
+      "className": "com.sample.app.ejb.service.ICustumerService",
+      "methodName": "getCustomer",
+      "concreteOnly": false,
+      "attributes": [
+        { "argIndex": 0, "attributeName": "app.service.customer_id" }
+      ]
+    }
+  ]
+}

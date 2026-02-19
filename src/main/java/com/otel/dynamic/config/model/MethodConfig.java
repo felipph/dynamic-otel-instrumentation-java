@@ -20,6 +20,14 @@ public class MethodConfig {
     private List<ReturnValueAttribute> returnValueAttributes;
 
     /**
+     * When true, only instrument concrete (non-abstract) classes.
+     * Useful for interface-based instrumentation where you want to skip
+     * abstract intermediate classes and only instrument the final leaf classes.
+     * null = use global configuration
+     */
+    private Boolean concreteOnly;
+
+    /**
      * Default constructor for JSON deserialization
      */
     public MethodConfig() {
@@ -92,6 +100,14 @@ public class MethodConfig {
         this.returnValueAttributes = returnValueAttributes != null ? returnValueAttributes : new ArrayList<>();
     }
 
+    public Boolean getConcreteOnly() {
+        return concreteOnly;
+    }
+
+    public void setConcreteOnly(Boolean concreteOnly) {
+        this.concreteOnly = concreteOnly;
+    }
+
     /**
      * Add an attribute definition to this method config
      */
@@ -119,6 +135,7 @@ public class MethodConfig {
                 ", methodName='" + methodName + '\'' +
                 ", attributes=" + attributes +
                 ", returnValueAttributes=" + returnValueAttributes +
+                ", concreteOnly=" + concreteOnly +
                 '}';
     }
 
@@ -132,7 +149,8 @@ public class MethodConfig {
         if (!Objects.equals(className, that.className)) return false;
         if (!Objects.equals(methodName, that.methodName)) return false;
         if (!Objects.equals(attributes, that.attributes)) return false;
-        return Objects.equals(returnValueAttributes, that.returnValueAttributes);
+        if (!Objects.equals(returnValueAttributes, that.returnValueAttributes)) return false;
+        return Objects.equals(concreteOnly, that.concreteOnly);
     }
 
     @Override
@@ -141,6 +159,7 @@ public class MethodConfig {
         result = 31 * result + (methodName != null ? methodName.hashCode() : 0);
         result = 31 * result + (attributes != null ? attributes.hashCode() : 0);
         result = 31 * result + (returnValueAttributes != null ? returnValueAttributes.hashCode() : 0);
+        result = 31 * result + (concreteOnly != null ? concreteOnly.hashCode() : 0);
         return result;
     }
 }

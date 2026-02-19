@@ -36,7 +36,7 @@ USER jboss
 
 # Copiar agente (se existir durante o build)
 # Nota: Normalmente montado via volume no docker-compose
-COPY --chown=jboss:jboss target/dynamic-instrumentation-agent-1.0.0.jar /opt/jboss/agents/dynamic-instrumentation-agent.jar
+COPY --chown=jboss:jboss target/dynamic-instrumentation-agent-1.1.0.jar /opt/jboss/agents/dynamic-instrumentation-agent.jar
 
 # Copiar configuração padrão
 COPY --chown=jboss:jboss docker/configs/instrumentation.json /opt/otel/config/instrumentation.json

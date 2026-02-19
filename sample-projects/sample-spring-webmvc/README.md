@@ -52,8 +52,8 @@ docker run -d --name jaeger \
 mvn clean package -DskipTests
 java \
   -javaagent:/path/to/opentelemetry-javaagent.jar \
-  -javaagent:../../target/dynamic-instrumentation-agent-1.0.0.jar \
-  -Dotel.javaagent.extensions=../../target/dynamic-instrumentation-agent-1.0.0.jar \
+  -javaagent:../../target/dynamic-instrumentation-agent-1.1.0.jar \
+  -Dotel.javaagent.extensions=../../target/dynamic-instrumentation-agent-1.1.0.jar \
   -Dinstrumentation.config.path=src/main/resources/instrumentation.json \
   -Dotel.service.name=sample-spring-webmvc \
   -Dotel.exporter.otlp.endpoint=http://localhost:4317 \
